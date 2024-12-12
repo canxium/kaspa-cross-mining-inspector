@@ -28,6 +28,7 @@ var (
 	// DefaultAppDir is the default home directory for kaspad.
 	DefaultAppDir  = util.AppDir(appDataDirectory, false)
 	defaultDataDir = filepath.Join(DefaultAppDir)
+	HeliumForkTime = uint64(1733488433)
 )
 
 type Flags struct {
@@ -41,6 +42,9 @@ type Flags struct {
 	Resync                   bool     `long:"resync" description:"Force to resync all available node blocks with the PostgrSQL database -- Use if some recently added blocks have missing parents"`
 	ClearDB                  bool     `long:"clear-db" description:"Clear the PostgrSQL database and sync from scratch"`
 	LogLevel                 string   `short:"d" long:"loglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
+	PrivateKey               string   `long:"private-key" description:"Private key of the account to submit merge mining transaction"`
+	CanxiumRpc               string   `long:"canxium-rpc" description:"Canxium RPC endpoint"`
+	HeliumForkTime           uint64   `long:"canxium-helium-time" description:"Canxium Helium fork time"`
 	kaspaConfigPackage.NetworkFlags
 }
 
@@ -64,8 +68,9 @@ func cleanAndExpandPath(path string) string {
 
 func defaultFlags() *Flags {
 	return &Flags{
-		AppDir:   defaultDataDir,
-		LogLevel: defaultLogLevel,
+		AppDir:         defaultDataDir,
+		LogLevel:       defaultLogLevel,
+		HeliumForkTime: HeliumForkTime,
 	}
 }
 
@@ -98,6 +103,14 @@ func LoadConfig() (*Config, error) {
 
 	if cfg.DatabaseConnectionString == "" {
 		return nil, errors.Errorf("--connection-string is required.")
+	}
+
+	if cfg.PrivateKey == "" {
+		return nil, errors.Errorf("--private-key is required.")
+	}
+
+	if cfg.CanxiumRpc == "" {
+		return nil, errors.Errorf("--canxium-rpc is required.")
 	}
 
 	err = cfg.ResolveNetwork(parser)

@@ -1,7 +1,20 @@
 package processing
 
 import (
+	"context"
+	"crypto/ecdsa"
+	"encoding/hex"
+	"math/big"
 	"sync"
+	"time"
+
+	"github.com/ethereum/go-ethereum/crypto"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"golang.org/x/crypto/sha3"
 
 	"github.com/go-pg/pg/v10"
 	databasePackage "github.com/kaspa-live/kaspa-graph-inspector/processing/database"
@@ -14,6 +27,7 @@ import (
 	versionPackage "github.com/kaspa-live/kaspa-graph-inspector/processing/version"
 	"github.com/kaspanet/kaspad/domain/consensus/model/externalapi"
 	"github.com/kaspanet/kaspad/domain/consensus/utils/consensushashing"
+	"github.com/kaspanet/kaspad/domain/consensus/utils/hashes"
 	"github.com/kaspanet/kaspad/infrastructure/db/database"
 	"github.com/kaspanet/kaspad/version"
 	"github.com/pkg/errors"
@@ -21,11 +35,19 @@ import (
 
 var log = logging.Logger()
 
+type Account struct {
+	address    common.Address
+	PrivateKey *ecdsa.PrivateKey
+	nonce      uint64
+}
+
 type Processing struct {
 	config    *configPackage.Config
 	database  *databasePackage.Database
 	kaspad    *kaspadPackage.Kaspad
 	appConfig *model.AppConfig
+	account   Account
+	ethClient *ethclient.Client
 
 	sync.Mutex
 }
@@ -40,15 +62,52 @@ func NewProcessing(config *configPackage.Config,
 		Network:           config.ActiveNetParams.Name,
 	}
 
+	client, err := ethclient.Dial(config.CanxiumRpc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Decode the private key from hex
+	privateKeyBytes, err := hex.DecodeString(config.PrivateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert bytes to ECDSA private key
+	privateKey, err := crypto.ToECDSA(privateKeyBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the public key
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return nil, err
+	}
+
+	// Generate the address from the public key
+	address := crypto.PubkeyToAddress(*publicKeyECDSA)
+	nonce, err := client.PendingNonceAt(context.Background(), address)
+	if err != nil {
+		return nil, err
+	}
+
 	processing := &Processing{
 		config:    config,
 		database:  database,
 		kaspad:    kaspad,
 		appConfig: appConfig,
+		ethClient: client,
+		account: Account{
+			address:    address,
+			PrivateKey: privateKey,
+			nonce:      nonce,
+		},
 	}
-	processing.initConsensusEventsHandler()
 
-	err := processing.RegisterAppConfig()
+	processing.initConsensusEventsHandler()
+	err = processing.RegisterAppConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -404,47 +463,6 @@ func (p *Processing) processBlock(databaseTransaction *pg.Tx, block *externalapi
 		if err != nil {
 			return errors.Wrapf(err, "Could not insert block %s", blockHash)
 		}
-
-		blockID, err := p.database.BlockIDByHash(databaseTransaction, blockHash)
-		if err != nil {
-			// enhanced error description
-			return errors.Wrapf(err, "Could not get id for block %s", blockHash)
-		}
-		heightGroup := &model.HeightGroup{
-			Height: blockHeight,
-			Size:   blockHeightGroupIndex + 1,
-		}
-		err = p.database.InsertOrUpdateHeightGroup(databaseTransaction, heightGroup)
-		if err != nil {
-			// enhanced error description
-			return errors.Wrapf(err, "Could not insert or update height group %d for block %s", blockHeight, blockHash)
-		}
-
-		for _, parentID := range parentIDs {
-			parentHeight, err := p.database.BlockHeight(databaseTransaction, parentID)
-			if err != nil {
-				// enhanced error description
-				return errors.Wrapf(err, "Could not get block height of parent id %d for block %s", parentID, blockHash)
-			}
-			parentHeightGroupIndex, err := p.database.BlockHeightGroupIndex(databaseTransaction, parentID)
-			if err != nil {
-				// enhanced error description
-				return errors.Wrapf(err, "Could not get height group index of parent id %d for block %s", parentID, blockHash)
-			}
-			edge := &model.Edge{
-				FromBlockID:          blockID,
-				ToBlockID:            parentID,
-				FromHeight:           blockHeight,
-				ToHeight:             parentHeight,
-				FromHeightGroupIndex: blockHeightGroupIndex,
-				ToHeightGroupIndex:   parentHeightGroupIndex,
-			}
-			err = p.database.InsertEdge(databaseTransaction, edge)
-			if err != nil {
-				// enhanced error description
-				return errors.Wrapf(err, "Could not insert edge from block %s to parent id %d", blockHash, parentID)
-			}
-		}
 	} else {
 		log.Debugf("Block %s already exists in database; not processed", blockHash)
 	}
@@ -507,6 +525,64 @@ func (p *Processing) processBlock(databaseTransaction *pg.Tx, block *externalapi
 	}
 
 	return nil
+}
+
+func (p *Processing) blockToMergeMiningTransaction(block *externalapi.DomainBlock) (*types.Transaction, error) {
+	blockHeader := types.NewImmutableKaspaBlockHeader(
+		block.Header.Version(),
+		block.Header.Parents(),
+		block.Header.HashMerkleRoot(),
+		block.Header.AcceptedIDMerkleRoot(),
+		block.Header.UTXOCommitment(),
+		block.Header.TimeInMilliseconds(),
+		block.Header.Bits(),
+		block.Header.Nonce(),
+		block.Header.DAAScore(),
+		block.Header.BlueScore(),
+		block.Header.BlueWork(),
+		block.Header.PruningPoint(),
+	)
+
+	proof := GenerateMerkleProofForCoinbase(block.Transactions)
+	kaspaBock := &types.KaspaBlock{
+		Header:      blockHeader,
+		MerkleProof: proof,
+		Coinbase:    block.Transactions[0],
+	}
+
+	diffculty := kaspaBock.Difficulty()
+	subsidy := misc.MergeMiningSubsidy(types.KaspaChain, p.config.HeliumForkTime, uint64(time.Now().Second()))
+	value := big.NewInt(0).Mul(diffculty, subsidy)
+
+	mineFnSignature := []byte("mining(address)")
+	hash := sha3.NewLegacyKeccak256()
+	hash.Write(mineFnSignature)
+	methodID := hash.Sum(nil)[:4]
+	receiver := common.HexToAddress("0xeae925f4c475e27be8f41790a484786992b5ffc7")
+	paddedAddress := common.LeftPadBytes(receiver.Bytes(), 32)
+
+	var data []byte
+	data = append(data, methodID...)
+	data = append(data, paddedAddress...)
+
+	signedTx, err := types.SignTx(types.NewTx(&types.MergeMiningTx{
+		ChainID:    big.NewInt(30303),
+		Nonce:      0,
+		GasTipCap:  big.NewInt(0),
+		GasFeeCap:  big.NewInt(0),
+		Gas:        100000,
+		From:       common.HexToAddress("0xF26417eCf894678B58feda327DC01A60041856fB"),
+		To:         common.HexToAddress("0xbc490d956aA603AB7e3a799ae1AD267b0e495885"),
+		Value:      value,
+		Data:       data,
+		Algorithm:  types.ScryptAlgorithm,
+		MergeProof: kaspaBock,
+	}), types.NewLondonSigner(big.NewInt(30303)), p.account.PrivateKey)
+	if err != nil {
+		return nil, errors.Errorf("Failed to sign raw transaction error: %+v", err)
+	}
+
+	return signedTx, nil
 }
 
 func (p *Processing) ProcessVirtualChange(blockInsertionResult *externalapi.VirtualChangeSet) error {
@@ -606,4 +682,54 @@ func (p *Processing) getBlocksDAAScores(databaseTransaction *pg.Tx, blockHashes 
 		}
 	}
 	return results, nil
+}
+
+// GenerateMerkleProofForFirstTransaction calculates the merkle root path, to verify coinbase transaction is included in the merkle root
+func GenerateMerkleProofForCoinbase(transactions []*externalapi.DomainTransaction) []*externalapi.DomainHash {
+	// If there is only one hash, no proof is needed
+	txHashes := make([]*externalapi.DomainHash, len(transactions))
+	for i, tx := range transactions {
+		txHashes[i] = consensushashing.TransactionHash(tx)
+	}
+
+	if len(txHashes) <= 1 {
+		return []*externalapi.DomainHash{}
+	}
+
+	proof := []*externalapi.DomainHash{}
+	levelHashes := txHashes
+
+	for len(levelHashes) > 1 {
+		if len(levelHashes)%2 != 0 {
+			// Duplicate the last hash if the number of hashes is odd
+			levelHashes = append(levelHashes, levelHashes[len(levelHashes)-1])
+		}
+
+		// The sibling hash is always the second element
+		proof = append(proof, levelHashes[1])
+
+		// Calculate the next level of the tree
+		nextLevel := []*externalapi.DomainHash{}
+		for i := 0; i < len(levelHashes); i += 2 {
+			newHash := hashMerkleBranches(levelHashes[i], levelHashes[i+1])
+			nextLevel = append(nextLevel, newHash)
+		}
+
+		levelHashes = nextLevel
+	}
+
+	return proof
+}
+
+// hashMerkleBranches takes two hashes, treated as the left and right tree
+// nodes, and returns the hash of their concatenation. This is a helper
+// function used to aid in the generation of a merkle tree.
+func hashMerkleBranches(left, right *externalapi.DomainHash) *externalapi.DomainHash {
+	// Concatenate the left and right nodes.
+	w := hashes.NewMerkleBranchHashWriter()
+
+	w.InfallibleWrite(left.ByteSlice())
+	w.InfallibleWrite(right.ByteSlice())
+
+	return w.Finalize()
 }
