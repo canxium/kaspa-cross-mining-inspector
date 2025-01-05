@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 const (
 	ColorGray = "gray"
 	ColorRed  = "red"
@@ -19,6 +21,14 @@ type Block struct {
 	IsInVirtualSelectedParentChain bool     `pg:"is_in_virtual_selected_parent_chain,use_zero"`
 	MergeSetRedIDs                 []uint64 `pg:"merge_set_red_ids,use_zero"`
 	MergeSetBlueIDs                []uint64 `pg:"merge_set_blue_ids,use_zero"`
+
+	MergeTxSigner  string `pg:"merge_tx_signer"`
+	MergeTxNonce   int64  `pg:"merge_tx_nonce,use_zero"`
+	MergeTxRaw     string `pg:"merge_tx_raw"`
+	MergeTxHash    string `pg:"merge_tx_hash"`
+	MergeTxSuccess bool   `pg:"merge_tx_success"`
+
+	Created time.Time `pg:"created"`
 }
 
 type Edge struct {

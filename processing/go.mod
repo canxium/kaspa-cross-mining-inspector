@@ -87,4 +87,4 @@ require (
 )
 
 // replace github.com/kaspanet/kaspad => ../../../kaspanet/kaspad
-replace github.com/ethereum/go-ethereum => github.com/canxium/go-canxium v0.2.4-0.20241211080413-ce1a812fde6c
+replace github.com/ethereum/go-ethereum => github.com/canxium/go-canxium v0.2.4-0.20241228234059-4b7b68e306be

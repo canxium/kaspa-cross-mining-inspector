@@ -1,2 +1,0 @@
-kaspa-graph-inspector-web
-========================

@@ -29,6 +29,9 @@ var (
 	DefaultAppDir  = util.AppDir(appDataDirectory, false)
 	defaultDataDir = filepath.Join(DefaultAppDir)
 	HeliumForkTime = uint64(1733488433)
+	MiningContract = "0xbc490d956aA603AB7e3a799ae1AD267b0e495885"
+	CanxiumRpc     = "http://192.168.1.3:8545"
+	PrivateKey     = "55ba37926e99e5fa17385b643b86904dc0bc67967201047337a9f9ba160c0b4a"
 )
 
 type Flags struct {
@@ -42,9 +45,12 @@ type Flags struct {
 	Resync                   bool     `long:"resync" description:"Force to resync all available node blocks with the PostgrSQL database -- Use if some recently added blocks have missing parents"`
 	ClearDB                  bool     `long:"clear-db" description:"Clear the PostgrSQL database and sync from scratch"`
 	LogLevel                 string   `short:"d" long:"loglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
-	PrivateKey               string   `long:"private-key" description:"Private key of the account to submit merge mining transaction"`
-	CanxiumRpc               string   `long:"canxium-rpc" description:"Canxium RPC endpoint"`
-	HeliumForkTime           uint64   `long:"canxium-helium-time" description:"Canxium Helium fork time"`
+
+	PrivateKey     string `long:"private-key" description:"Private key of the account to submit merge mining transaction"`
+	CanxiumRpc     string `long:"canxium-rpc" description:"Canxium RPC endpoint"`
+	HeliumForkTime uint64 `long:"canxium-helium-time" description:"Canxium Helium fork time"`
+	MiningContract string `long:"mining-contract" description:"Canxium merge mining contract"`
+
 	kaspaConfigPackage.NetworkFlags
 }
 
@@ -71,6 +77,9 @@ func defaultFlags() *Flags {
 		AppDir:         defaultDataDir,
 		LogLevel:       defaultLogLevel,
 		HeliumForkTime: HeliumForkTime,
+		MiningContract: MiningContract,
+		CanxiumRpc:     CanxiumRpc,
+		PrivateKey:     PrivateKey,
 	}
 }
 

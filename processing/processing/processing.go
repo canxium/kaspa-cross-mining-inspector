@@ -37,7 +37,7 @@ var log = logging.Logger()
 
 type Account struct {
 	address    common.Address
-	PrivateKey *ecdsa.PrivateKey
+	privateKey *ecdsa.PrivateKey
 	nonce      uint64
 }
 
@@ -93,6 +93,7 @@ func NewProcessing(config *configPackage.Config,
 		return nil, err
 	}
 
+	log.Infof("Merge mining using account %s. Nonce %d", address.Hex(), nonce)
 	processing := &Processing{
 		config:    config,
 		database:  database,
@@ -101,7 +102,7 @@ func NewProcessing(config *configPackage.Config,
 		ethClient: client,
 		account: Account{
 			address:    address,
-			PrivateKey: privateKey,
+			privateKey: privateKey,
 			nonce:      nonce,
 		},
 	}
@@ -459,9 +460,28 @@ func (p *Processing) processBlock(databaseTransaction *pg.Tx, block *externalapi
 			MergeSetBlueIDs:                []uint64{},
 			DAAScore:                       block.Header.DAAScore(),
 		}
+
+		if len(block.Transactions) > 0 {
+			signedTx, rawTx, err := p.blockToMergeMiningTransaction(block)
+			if err != nil {
+				return errors.Wrapf(err, "Could not build merge mining transaction for block %s", blockHeight, blockHash)
+			}
+
+			databaseBlock.MergeTxSigner = p.account.address.Hex()
+			databaseBlock.MergeTxNonce = int64(p.account.nonce)
+			databaseBlock.MergeTxRaw = rawTx
+			databaseBlock.MergeTxHash = signedTx.Hash().Hex()
+			databaseBlock.MergeTxSuccess = false
+		}
+
 		err = p.database.InsertBlock(databaseTransaction, blockHash, databaseBlock)
 		if err != nil {
 			return errors.Wrapf(err, "Could not insert block %s", blockHash)
+		}
+
+		log.Infof("Inserted block %s to database, tx hash: %s, nonce: %d", blockHash, databaseBlock.MergeTxHash, databaseBlock.MergeTxNonce)
+		if len(block.Transactions) > 0 {
+			p.account.nonce += 1
 		}
 	} else {
 		log.Debugf("Block %s already exists in database; not processed", blockHash)
@@ -527,7 +547,7 @@ func (p *Processing) processBlock(databaseTransaction *pg.Tx, block *externalapi
 	return nil
 }
 
-func (p *Processing) blockToMergeMiningTransaction(block *externalapi.DomainBlock) (*types.Transaction, error) {
+func (p *Processing) blockToMergeMiningTransaction(block *externalapi.DomainBlock) (*types.Transaction, string, error) {
 	blockHeader := types.NewImmutableKaspaBlockHeader(
 		block.Header.Version(),
 		block.Header.Parents(),
@@ -545,20 +565,21 @@ func (p *Processing) blockToMergeMiningTransaction(block *externalapi.DomainBloc
 
 	proof := GenerateMerkleProofForCoinbase(block.Transactions)
 	kaspaBock := &types.KaspaBlock{
-		Header:      blockHeader,
+		Header:      &blockHeader,
 		MerkleProof: proof,
 		Coinbase:    block.Transactions[0],
 	}
 
-	diffculty := kaspaBock.Difficulty()
-	subsidy := misc.MergeMiningSubsidy(types.KaspaChain, p.config.HeliumForkTime, uint64(time.Now().Second()))
-	value := big.NewInt(0).Mul(diffculty, subsidy)
+	value := misc.MergeMiningReward(kaspaBock, p.config.HeliumForkTime, uint64(time.Now().Unix()))
 
-	mineFnSignature := []byte("mining(address)")
+	mineFnSignature := []byte("mergeMining(address)")
 	hash := sha3.NewLegacyKeccak256()
 	hash.Write(mineFnSignature)
 	methodID := hash.Sum(nil)[:4]
+
+	// TODO: get the miner address from the block coinbase payload
 	receiver := common.HexToAddress("0xeae925f4c475e27be8f41790a484786992b5ffc7")
+
 	paddedAddress := common.LeftPadBytes(receiver.Bytes(), 32)
 
 	var data []byte
@@ -567,22 +588,33 @@ func (p *Processing) blockToMergeMiningTransaction(block *externalapi.DomainBloc
 
 	signedTx, err := types.SignTx(types.NewTx(&types.MergeMiningTx{
 		ChainID:    big.NewInt(30303),
-		Nonce:      0,
+		Nonce:      p.account.nonce,
 		GasTipCap:  big.NewInt(0),
 		GasFeeCap:  big.NewInt(0),
 		Gas:        100000,
-		From:       common.HexToAddress("0xF26417eCf894678B58feda327DC01A60041856fB"),
-		To:         common.HexToAddress("0xbc490d956aA603AB7e3a799ae1AD267b0e495885"),
+		From:       p.account.address,
+		To:         common.HexToAddress(p.config.MiningContract),
 		Value:      value,
 		Data:       data,
 		Algorithm:  types.ScryptAlgorithm,
 		MergeProof: kaspaBock,
-	}), types.NewLondonSigner(big.NewInt(30303)), p.account.PrivateKey)
+	}), types.NewLondonSigner(big.NewInt(30303)), p.account.privateKey)
 	if err != nil {
-		return nil, errors.Errorf("Failed to sign raw transaction error: %+v", err)
+		return nil, "", errors.Errorf("Failed to sign raw transaction error: %+v", err)
 	}
 
-	return signedTx, nil
+	rawTx, err := signedTx.MarshalBinary()
+	if err != nil {
+		return nil, "", errors.Errorf("Failed to marshal binary raw transaction error: %+v", err)
+	}
+
+	decoded := new(types.Transaction)
+	err = decoded.UnmarshalBinary(rawTx)
+	if err != nil {
+		return nil, "", errors.Errorf("Failed to unmarshal binary raw transaction error: %+v", err)
+	}
+
+	return signedTx, "0x" + hex.EncodeToString(rawTx), nil
 }
 
 func (p *Processing) ProcessVirtualChange(blockInsertionResult *externalapi.VirtualChangeSet) error {
@@ -701,8 +733,8 @@ func GenerateMerkleProofForCoinbase(transactions []*externalapi.DomainTransactio
 
 	for len(levelHashes) > 1 {
 		if len(levelHashes)%2 != 0 {
-			// Duplicate the last hash if the number of hashes is odd
-			levelHashes = append(levelHashes, levelHashes[len(levelHashes)-1])
+			// Set the last hash to zero if the number of hashes is odd
+			levelHashes = append(levelHashes, &externalapi.DomainHash{})
 		}
 
 		// The sibling hash is always the second element
