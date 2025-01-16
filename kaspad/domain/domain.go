@@ -5,8 +5,8 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	consensusPackage "github.com/kaspa-live/kaspa-graph-inspector/processing/kaspad/domain/consensus"
-	"github.com/kaspa-live/kaspa-graph-inspector/processing/kaspad/domain/mining_manager"
+	consensusPackage "github.com/kaspa-live/kaspa-graph-inspector/kaspad/domain/consensus"
+	"github.com/kaspa-live/kaspa-graph-inspector/kaspad/domain/mining_manager"
 	"github.com/kaspanet/kaspad/domain/consensus"
 	"github.com/kaspanet/kaspad/domain/consensus/model/externalapi"
 	"github.com/kaspanet/kaspad/domain/dagconfig"

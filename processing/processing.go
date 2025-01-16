@@ -1,30 +1,17 @@
 package processing
 
 import (
-	"context"
-	"crypto/ecdsa"
-	"encoding/hex"
-	"math/big"
 	"sync"
-	"time"
-
-	"github.com/ethereum/go-ethereum/crypto"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"golang.org/x/crypto/sha3"
 
 	"github.com/go-pg/pg/v10"
-	databasePackage "github.com/kaspa-live/kaspa-graph-inspector/processing/database"
-	"github.com/kaspa-live/kaspa-graph-inspector/processing/database/model"
-	configPackage "github.com/kaspa-live/kaspa-graph-inspector/processing/infrastructure/config"
-	"github.com/kaspa-live/kaspa-graph-inspector/processing/infrastructure/logging"
-	"github.com/kaspa-live/kaspa-graph-inspector/processing/infrastructure/tools"
-	kaspadPackage "github.com/kaspa-live/kaspa-graph-inspector/processing/kaspad"
-	"github.com/kaspa-live/kaspa-graph-inspector/processing/processing/batch"
-	versionPackage "github.com/kaspa-live/kaspa-graph-inspector/processing/version"
+	databasePackage "github.com/kaspa-live/kaspa-graph-inspector/database"
+	"github.com/kaspa-live/kaspa-graph-inspector/database/model"
+	configPackage "github.com/kaspa-live/kaspa-graph-inspector/infrastructure/config"
+	"github.com/kaspa-live/kaspa-graph-inspector/infrastructure/logging"
+	"github.com/kaspa-live/kaspa-graph-inspector/infrastructure/tools"
+	kaspadPackage "github.com/kaspa-live/kaspa-graph-inspector/kaspad"
+	"github.com/kaspa-live/kaspa-graph-inspector/processing/batch"
+	versionPackage "github.com/kaspa-live/kaspa-graph-inspector/version"
 	"github.com/kaspanet/kaspad/domain/consensus/model/externalapi"
 	"github.com/kaspanet/kaspad/domain/consensus/utils/consensushashing"
 	"github.com/kaspanet/kaspad/domain/consensus/utils/hashes"
@@ -35,19 +22,12 @@ import (
 
 var log = logging.Logger()
 
-type Account struct {
-	address    common.Address
-	privateKey *ecdsa.PrivateKey
-	nonce      uint64
-}
-
 type Processing struct {
-	config    *configPackage.Config
-	database  *databasePackage.Database
-	kaspad    *kaspadPackage.Kaspad
-	appConfig *model.AppConfig
-	account   Account
-	ethClient *ethclient.Client
+	config      *configPackage.Config
+	database    *databasePackage.Database
+	kaspad      *kaspadPackage.Kaspad
+	appConfig   *model.AppConfig
+	mergeMining *MergeMining
 
 	sync.Mutex
 }
@@ -62,63 +42,33 @@ func NewProcessing(config *configPackage.Config,
 		Network:           config.ActiveNetParams.Name,
 	}
 
-	client, err := ethclient.Dial(config.CanxiumRpc)
+	mergeMining, err := NewMergeMining(config, database)
 	if err != nil {
 		return nil, err
 	}
 
-	// Decode the private key from hex
-	privateKeyBytes, err := hex.DecodeString(config.PrivateKey)
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert bytes to ECDSA private key
-	privateKey, err := crypto.ToECDSA(privateKeyBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the public key
-	publicKey := privateKey.Public()
-	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
-	if !ok {
-		return nil, err
-	}
-
-	// Generate the address from the public key
-	address := crypto.PubkeyToAddress(*publicKeyECDSA)
-	nonce, err := client.PendingNonceAt(context.Background(), address)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Infof("Merge mining using account %s. Nonce %d", address.Hex(), nonce)
 	processing := &Processing{
-		config:    config,
-		database:  database,
-		kaspad:    kaspad,
-		appConfig: appConfig,
-		ethClient: client,
-		account: Account{
-			address:    address,
-			privateKey: privateKey,
-			nonce:      nonce,
-		},
+		config:      config,
+		database:    database,
+		kaspad:      kaspad,
+		appConfig:   appConfig,
+		mergeMining: mergeMining,
 	}
 
 	processing.initConsensusEventsHandler()
-	err = processing.RegisterAppConfig()
-	if err != nil {
+	if err := processing.RegisterAppConfig(); err != nil {
 		return nil, err
 	}
 
-	err = processing.ResyncDatabase()
-	if err != nil {
+	if err := processing.ResyncDatabase(); err != nil {
 		return nil, err
 	}
 
 	return processing, nil
+}
+
+func (p *Processing) SubmitTransactions() error {
+	return p.mergeMining.SubmitTransactions()
 }
 
 func (p *Processing) initConsensusEventsHandler() {
@@ -392,6 +342,9 @@ func (p *Processing) processBlockAndDependencies(databaseTransaction *pg.Tx, has
 		if !batch.Empty() {
 			log.Warnf("Handling missing dependency block %s", consensushashing.BlockHash(block))
 		}
+		if err := p.mergeMining.processBlock(block); err != nil {
+			return err
+		}
 		err = p.processBlock(databaseTransaction, block)
 		if err != nil {
 			return err
@@ -461,27 +414,9 @@ func (p *Processing) processBlock(databaseTransaction *pg.Tx, block *externalapi
 			DAAScore:                       block.Header.DAAScore(),
 		}
 
-		if len(block.Transactions) > 0 {
-			signedTx, rawTx, err := p.blockToMergeMiningTransaction(block)
-			if err != nil {
-				return errors.Wrapf(err, "Could not build merge mining transaction for block %s", blockHeight, blockHash)
-			}
-
-			databaseBlock.MergeTxSigner = p.account.address.Hex()
-			databaseBlock.MergeTxNonce = int64(p.account.nonce)
-			databaseBlock.MergeTxRaw = rawTx
-			databaseBlock.MergeTxHash = signedTx.Hash().Hex()
-			databaseBlock.MergeTxSuccess = false
-		}
-
 		err = p.database.InsertBlock(databaseTransaction, blockHash, databaseBlock)
 		if err != nil {
 			return errors.Wrapf(err, "Could not insert block %s", blockHash)
-		}
-
-		log.Infof("Inserted block %s to database, tx hash: %s, nonce: %d", blockHash, databaseBlock.MergeTxHash, databaseBlock.MergeTxNonce)
-		if len(block.Transactions) > 0 {
-			p.account.nonce += 1
 		}
 	} else {
 		log.Debugf("Block %s already exists in database; not processed", blockHash)
@@ -545,76 +480,6 @@ func (p *Processing) processBlock(databaseTransaction *pg.Tx, block *externalapi
 	}
 
 	return nil
-}
-
-func (p *Processing) blockToMergeMiningTransaction(block *externalapi.DomainBlock) (*types.Transaction, string, error) {
-	blockHeader := types.NewImmutableKaspaBlockHeader(
-		block.Header.Version(),
-		block.Header.Parents(),
-		block.Header.HashMerkleRoot(),
-		block.Header.AcceptedIDMerkleRoot(),
-		block.Header.UTXOCommitment(),
-		block.Header.TimeInMilliseconds(),
-		block.Header.Bits(),
-		block.Header.Nonce(),
-		block.Header.DAAScore(),
-		block.Header.BlueScore(),
-		block.Header.BlueWork(),
-		block.Header.PruningPoint(),
-	)
-
-	proof := GenerateMerkleProofForCoinbase(block.Transactions)
-	kaspaBock := &types.KaspaBlock{
-		Header:      &blockHeader,
-		MerkleProof: proof,
-		Coinbase:    block.Transactions[0],
-	}
-
-	value := misc.MergeMiningReward(kaspaBock, p.config.HeliumForkTime, uint64(time.Now().Unix()))
-
-	mineFnSignature := []byte("mergeMining(address)")
-	hash := sha3.NewLegacyKeccak256()
-	hash.Write(mineFnSignature)
-	methodID := hash.Sum(nil)[:4]
-
-	// TODO: get the miner address from the block coinbase payload
-	receiver := common.HexToAddress("0xeae925f4c475e27be8f41790a484786992b5ffc7")
-
-	paddedAddress := common.LeftPadBytes(receiver.Bytes(), 32)
-
-	var data []byte
-	data = append(data, methodID...)
-	data = append(data, paddedAddress...)
-
-	signedTx, err := types.SignTx(types.NewTx(&types.MergeMiningTx{
-		ChainID:    big.NewInt(30303),
-		Nonce:      p.account.nonce,
-		GasTipCap:  big.NewInt(0),
-		GasFeeCap:  big.NewInt(0),
-		Gas:        100000,
-		From:       p.account.address,
-		To:         common.HexToAddress(p.config.MiningContract),
-		Value:      value,
-		Data:       data,
-		Algorithm:  types.ScryptAlgorithm,
-		MergeProof: kaspaBock,
-	}), types.NewLondonSigner(big.NewInt(30303)), p.account.privateKey)
-	if err != nil {
-		return nil, "", errors.Errorf("Failed to sign raw transaction error: %+v", err)
-	}
-
-	rawTx, err := signedTx.MarshalBinary()
-	if err != nil {
-		return nil, "", errors.Errorf("Failed to marshal binary raw transaction error: %+v", err)
-	}
-
-	decoded := new(types.Transaction)
-	err = decoded.UnmarshalBinary(rawTx)
-	if err != nil {
-		return nil, "", errors.Errorf("Failed to unmarshal binary raw transaction error: %+v", err)
-	}
-
-	return signedTx, "0x" + hex.EncodeToString(rawTx), nil
 }
 
 func (p *Processing) ProcessVirtualChange(blockInsertionResult *externalapi.VirtualChangeSet) error {

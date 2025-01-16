@@ -24,11 +24,13 @@ RUN go mod tidy
 
 RUN go env -w GOFLAGS=-mod=mod
 
-RUN GOOS=linux go build -ldflags="-extldflags=-Wl,--allow-multiple-definition" -o processing .
+RUN GOOS=linux go build -ldflags="-extldflags=-Wl,--allow-multiple-definition" -o processing cmd/kaspad/main.go
+RUN GOOS=linux go build -ldflags="-extldflags=-Wl,--allow-multiple-definition" -o merging cmd/rpc/main.go
 
 FROM alpine
 WORKDIR /app
 COPY --from=build /build/processing /app/
+COPY --from=build /build/merging /app/
 
 RUN mkdir -p /app/database/migrations
 COPY --from=build /build/database/migrations/ /app/database/migrations/

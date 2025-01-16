@@ -1,7 +1,5 @@
 package model
 
-import "time"
-
 const (
 	ColorGray = "gray"
 	ColorRed  = "red"
@@ -27,8 +25,22 @@ type Block struct {
 	MergeTxRaw     string `pg:"merge_tx_raw"`
 	MergeTxHash    string `pg:"merge_tx_hash"`
 	MergeTxSuccess bool   `pg:"merge_tx_success"`
+}
 
-	Created time.Time `pg:"created"`
+type MergeBlock struct {
+	ID         uint64 `pg:"id,pk"`
+	BlockHash  string `pg:"block_hash"`
+	Difficulty uint64 `pg:"difficulty"`
+	Timestamp  int64  `pg:"timestamp,use_zero"`
+	Miner      string `pg:"miner"`
+
+	MergeTxSigner  string `pg:"merge_tx_signer"`
+	MergeTxNonce   int64  `pg:"merge_tx_nonce,use_zero"`
+	MergeTxRaw     string `pg:"merge_tx_raw"`
+	MergeTxHash    string `pg:"merge_tx_hash"`
+	MergeTxSuccess bool   `pg:"merge_tx_success,use_zero"`
+
+	IsValidBlock bool `pg:"is_valid_block,use_zero"`
 }
 
 type Edge struct {
@@ -53,4 +65,10 @@ type AppConfig struct {
 	KaspadVersion     string `pg:"kaspad_version"`
 	ProcessingVersion string `pg:"processing_version"`
 	Network           string `pg:"network"`
+}
+
+type CanxiumAccount struct {
+	ID         uint64 `pg:"id,pk"`
+	Address    string `pg:"address"`
+	PrivateKey string `pg:"private_key"`
 }

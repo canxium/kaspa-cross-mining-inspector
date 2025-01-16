@@ -73,8 +73,8 @@ github.com/btcsuite/btcutil v1.0.2 h1:9iZ1Terx9fMIOtq1VrwdqfsATL9MC2l8ZrUY6YZ2ut
 github.com/btcsuite/btcutil v1.0.2/go.mod h1:j9HUFwoQRsZL3V4n+qG+CUnEGHOarIxfC3Le2Yhbcts=
 github.com/btcsuite/go-socks v0.0.0-20170105172521-4720035b7bfd h1:R/opQEbFEy9JGkIguV40SvRY1uliPX8ifOvi6ICsFCw=
 github.com/btcsuite/go-socks v0.0.0-20170105172521-4720035b7bfd/go.mod h1:HHNXQzUsZCxOoE+CPiyCTO6x34Zs86zZUiwtpXoGdtg=
-github.com/canxium/go-canxium v0.2.4-0.20241228234059-4b7b68e306be h1:uRAUID04fd2YI36xLs1wzHZpbAnKN931E63rZjeLXIM=
-github.com/canxium/go-canxium v0.2.4-0.20241228234059-4b7b68e306be/go.mod h1:KlLuHqipedc4ctwY7JTm4ZEUHAy9iGNkq2PDdXFEwsY=
+github.com/canxium/go-canxium v0.2.4-0.20250115073138-0d53dc8ed493 h1:0pyNuXj//sSy6+RcF4SMYLR44GBAfqudDnb8Q6vfk/8=
+github.com/canxium/go-canxium v0.2.4-0.20250115073138-0d53dc8ed493/go.mod h1:mvA7GLq2LpNBY+6Gg6CeO+mfQ0QgE9ziUfDVIilVWuk=
 github.com/cenkalti/backoff/v4 v4.0.2/go.mod h1:eEew/i+1Q6OrCDZh3WiXYv3+nJwBASZ8Bog/87DQnVg=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/cespare/xxhash/v2 v2.1.1/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=

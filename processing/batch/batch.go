@@ -2,9 +2,9 @@ package batch
 
 import (
 	"github.com/go-pg/pg/v10"
-	databasePackage "github.com/kaspa-live/kaspa-graph-inspector/processing/database"
-	"github.com/kaspa-live/kaspa-graph-inspector/processing/infrastructure/logging"
-	kaspadPackage "github.com/kaspa-live/kaspa-graph-inspector/processing/kaspad"
+	databasePackage "github.com/kaspa-live/kaspa-graph-inspector/database"
+	"github.com/kaspa-live/kaspa-graph-inspector/infrastructure/logging"
+	kaspadPackage "github.com/kaspa-live/kaspa-graph-inspector/kaspad"
 	"github.com/kaspanet/kaspad/domain/consensus/database"
 	"github.com/kaspanet/kaspad/domain/consensus/model/externalapi"
 	"github.com/pkg/errors"

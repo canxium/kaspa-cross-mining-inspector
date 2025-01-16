@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/jessevdk/go-flags"
-	"github.com/kaspa-live/kaspa-graph-inspector/processing/infrastructure/logging"
-	versionPackage "github.com/kaspa-live/kaspa-graph-inspector/processing/version"
+	"github.com/kaspa-live/kaspa-graph-inspector/infrastructure/logging"
+	versionPackage "github.com/kaspa-live/kaspa-graph-inspector/version"
 	kaspaConfigPackage "github.com/kaspanet/kaspad/infrastructure/config"
 	kaspaLogger "github.com/kaspanet/kaspad/infrastructure/logger"
 	"github.com/kaspanet/kaspad/util"
@@ -26,12 +26,9 @@ const (
 
 var (
 	// DefaultAppDir is the default home directory for kaspad.
-	DefaultAppDir  = util.AppDir(appDataDirectory, false)
-	defaultDataDir = filepath.Join(DefaultAppDir)
-	HeliumForkTime = uint64(1733488433)
-	MiningContract = "0xbc490d956aA603AB7e3a799ae1AD267b0e495885"
-	CanxiumRpc     = "http://192.168.1.3:8545"
-	PrivateKey     = "55ba37926e99e5fa17385b643b86904dc0bc67967201047337a9f9ba160c0b4a"
+	DefaultAppDir          = util.AppDir(appDataDirectory, false)
+	defaultDataDir         = filepath.Join(DefaultAppDir)
+	MinimumKaspaDifficulty = uint64(5214000)
 )
 
 type Flags struct {
@@ -48,6 +45,7 @@ type Flags struct {
 
 	PrivateKey     string `long:"private-key" description:"Private key of the account to submit merge mining transaction"`
 	CanxiumRpc     string `long:"canxium-rpc" description:"Canxium RPC endpoint"`
+	KaspaRpc       string `long:"kaspa-rpc" description:"Kaspa RPC endpoint"`
 	HeliumForkTime uint64 `long:"canxium-helium-time" description:"Canxium Helium fork time"`
 	MiningContract string `long:"mining-contract" description:"Canxium merge mining contract"`
 
@@ -74,12 +72,8 @@ func cleanAndExpandPath(path string) string {
 
 func defaultFlags() *Flags {
 	return &Flags{
-		AppDir:         defaultDataDir,
-		LogLevel:       defaultLogLevel,
-		HeliumForkTime: HeliumForkTime,
-		MiningContract: MiningContract,
-		CanxiumRpc:     CanxiumRpc,
-		PrivateKey:     PrivateKey,
+		AppDir:   defaultDataDir,
+		LogLevel: defaultLogLevel,
 	}
 }
 
@@ -112,10 +106,6 @@ func LoadConfig() (*Config, error) {
 
 	if cfg.DatabaseConnectionString == "" {
 		return nil, errors.Errorf("--connection-string is required.")
-	}
-
-	if cfg.PrivateKey == "" {
-		return nil, errors.Errorf("--private-key is required.")
 	}
 
 	if cfg.CanxiumRpc == "" {

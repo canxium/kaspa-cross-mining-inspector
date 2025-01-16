@@ -3,18 +3,18 @@ package main
 import (
 	"fmt"
 
-	databasePackage "github.com/kaspa-live/kaspa-graph-inspector/processing/database"
-	configPackage "github.com/kaspa-live/kaspa-graph-inspector/processing/infrastructure/config"
-	"github.com/kaspa-live/kaspa-graph-inspector/processing/infrastructure/logging"
-	kaspadPackage "github.com/kaspa-live/kaspa-graph-inspector/processing/kaspad"
-	processingPackage "github.com/kaspa-live/kaspa-graph-inspector/processing/processing"
-	versionPackage "github.com/kaspa-live/kaspa-graph-inspector/processing/version"
+	databasePackage "github.com/kaspa-live/kaspa-graph-inspector/database"
+	configPackage "github.com/kaspa-live/kaspa-graph-inspector/infrastructure/config"
+	"github.com/kaspa-live/kaspa-graph-inspector/infrastructure/logging"
+	kaspadPackage "github.com/kaspa-live/kaspa-graph-inspector/kaspad"
+	processingPackage "github.com/kaspa-live/kaspa-graph-inspector/processing"
+	versionPackage "github.com/kaspa-live/kaspa-graph-inspector/version"
 	"github.com/kaspanet/kaspad/version"
 )
 
 func main() {
 	fmt.Println("=================================================")
-	fmt.Println("Kaspa Graph Inspector (KGI)   -   Processing Tier")
+	fmt.Println("Kaspa Merge Mining Inspector  -  Processing Tier")
 	fmt.Println("=================================================")
 
 	config, err := configPackage.LoadConfig()
@@ -40,20 +40,6 @@ func main() {
 	if err != nil {
 		logging.LogErrorAndExit("Could not initialize processing: %s", err)
 	}
-
-	// This is no longer useful since kaspad v0.12.2
-	// that introduce a consensus event channel.
-	// See processing.initConsensusEventsHandler.
-
-	// kaspad.SetOnBlockAddedListener(func(block *externalapi.DomainBlock) {
-	// 	blockHash := consensushashing.BlockHash(block)
-	// 	blockInfo, err := kaspad.Domain().Consensus().GetBlockInfo(blockHash)
-	// 	if err != nil {
-	// 		logging.LogErrorAndExit("Consensus ValidateAndInsertBlock listener could not get block info for block %s: %s", blockHash, err)
-	// 	}
-	// 	logging.Logger().Debugf("Consensus ValidateAndInsertBlock listener gets block %s with status %s", blockHash, blockInfo.BlockStatus.String())
-	// })
-
 	kaspad.SetOnVirtualResolvedListener(func() {
 		err := processing.ResyncVirtualSelectedParentChain()
 		if err != nil {
@@ -66,6 +52,8 @@ func main() {
 			logging.LogErrorAndExit("Could not resync database: %s", err)
 		}
 	})
+
+	go processing.SubmitTransactions()
 	err = kaspad.Start()
 	if err != nil {
 		logging.LogErrorAndExit("Could not start kaspad: %s", err)

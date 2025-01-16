@@ -1,11 +1,14 @@
 package kaspad
 
 import (
-	configPackage "github.com/kaspa-live/kaspa-graph-inspector/processing/infrastructure/config"
-	"github.com/kaspa-live/kaspa-graph-inspector/processing/infrastructure/database"
-	//"github.com/kaspa-live/kaspa-graph-inspector/processing/infrastructure/logging"
-	domainPackage "github.com/kaspa-live/kaspa-graph-inspector/processing/kaspad/domain"
-	consensusPackage "github.com/kaspa-live/kaspa-graph-inspector/processing/kaspad/domain/consensus"
+	configPackage "github.com/kaspa-live/kaspa-graph-inspector/infrastructure/config"
+	"github.com/kaspa-live/kaspa-graph-inspector/infrastructure/database"
+
+	//"github.com/kaspa-live/kaspa-graph-inspector/infrastructure/logging"
+	"net"
+
+	domainPackage "github.com/kaspa-live/kaspa-graph-inspector/kaspad/domain"
+	consensusPackage "github.com/kaspa-live/kaspa-graph-inspector/kaspad/domain/consensus"
 	"github.com/kaspanet/kaspad/app/protocol"
 	"github.com/kaspanet/kaspad/domain/consensus/model/externalapi"
 	kaspadConfigPackage "github.com/kaspanet/kaspad/infrastructure/config"
@@ -13,7 +16,6 @@ import (
 	"github.com/kaspanet/kaspad/infrastructure/network/connmanager"
 	"github.com/kaspanet/kaspad/infrastructure/network/netadapter"
 	"github.com/kaspanet/kaspad/infrastructure/network/netadapter/router"
-	"net"
 )
 
 type Kaspad struct {

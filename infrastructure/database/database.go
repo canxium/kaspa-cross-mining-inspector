@@ -1,11 +1,12 @@
 package database
 
 import (
-	"github.com/kaspa-live/kaspa-graph-inspector/processing/infrastructure/config"
-	"github.com/kaspa-live/kaspa-graph-inspector/processing/infrastructure/logging"
+	"path/filepath"
+
+	"github.com/kaspa-live/kaspa-graph-inspector/infrastructure/config"
+	"github.com/kaspa-live/kaspa-graph-inspector/infrastructure/logging"
 	"github.com/kaspanet/kaspad/infrastructure/db/database"
 	"github.com/kaspanet/kaspad/infrastructure/db/database/ldb"
-	"path/filepath"
 )
 
 const (

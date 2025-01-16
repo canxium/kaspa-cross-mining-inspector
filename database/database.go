@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	"github.com/go-pg/pg/v10"
-	"github.com/kaspa-live/kaspa-graph-inspector/processing/database/model"
-	"github.com/kaspa-live/kaspa-graph-inspector/processing/database/utils/lrucache"
+	"github.com/kaspa-live/kaspa-graph-inspector/database/model"
+	"github.com/kaspa-live/kaspa-graph-inspector/database/utils/lrucache"
 	"github.com/kaspanet/kaspad/domain/consensus/model/externalapi"
 	"github.com/pkg/errors"
 )
@@ -101,7 +101,7 @@ func (db *Database) DoesBlockExist(databaseTransaction *pg.Tx, blockHash *extern
 }
 
 func (db *Database) InsertBlock(databaseTransaction *pg.Tx, blockHash *externalapi.DomainHash, block *model.Block) error {
-	_, err := databaseTransaction.Model(block).Insert()
+	_, err := db.database.Model(block).Insert()
 	if err != nil {
 		return err
 	}
@@ -113,6 +113,70 @@ func (db *Database) InsertBlock(databaseTransaction *pg.Tx, blockHash *externala
 	db.blockBaseCache.Add(blockHash, bb)
 
 	return nil
+}
+
+func (db *Database) DoesMergeBlockExist(databaseTransaction *pg.Tx, blockHash *externalapi.DomainHash) (bool, error) {
+	// Search cache
+	if db.blockBaseCache.Has(blockHash) {
+		return true, nil
+	}
+
+	// Search database
+	var results []blockBase
+
+	_, err := databaseTransaction.Query(&results, "SELECT id, height FROM blocks WHERE block_hash = ?", blockHash.String())
+	if err != nil {
+		return false, err
+	}
+	if len(results) != 1 {
+		return false, nil
+	}
+	db.blockBaseCache.Add(blockHash, results[0].Clone())
+
+	return true, nil
+}
+
+func (db *Database) InsertMergeBlock(block *model.MergeBlock) error {
+	if _, err := db.database.Model(block).
+		OnConflict("(block_hash) DO UPDATE").
+		Set("difficulty = EXCLUDED.difficulty, miner = EXCLUDED.miner, merge_tx_signer = EXCLUDED.merge_tx_signer, merge_tx_nonce = EXCLUDED.merge_tx_nonce, merge_tx_raw = EXCLUDED.merge_tx_raw, merge_tx_hash = EXCLUDED.merge_tx_hash, merge_tx_success = EXCLUDED.merge_tx_success, is_valid_block = EXCLUDED.is_valid_block, timestamp = EXCLUDED.timestamp").
+		Insert(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *Database) GetUnProcessMergeBlock() (*model.MergeBlock, error) {
+	result := new(model.MergeBlock)
+	_, err := db.database.QueryOne(result, "SELECT * FROM merge_blocks WHERE merge_tx_hash is null and is_valid_block = true order by timestamp asc limit 1")
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (db *Database) GetPendingMergeBlocks() (*[]model.MergeBlock, error) {
+	result := new([]model.MergeBlock)
+	_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE merge_tx_hash is not null and is_valid_block = true and merge_tx_success = false order by timestamp asc limit 10")
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (db *Database) IsExistSameBlockMinerAndTimeStamp(miner string, timestamp int64) bool {
+	result := new(model.MergeBlock)
+	_, err := db.database.QueryOne(result, "SELECT * FROM merge_blocks WHERE miner = ? and timestamp = ? and is_valid_block = true", miner, timestamp)
+	if err != nil {
+		return false
+	}
+
+	if result != nil && result.Miner == miner && result.Timestamp == timestamp {
+		return true
+	}
+
+	return false
 }
 
 // GetBlock returns a block identified by `id`.
@@ -356,6 +420,14 @@ func (db *Database) InsertOrUpdateHeightGroup(databaseTransaction *pg.Tx, height
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (db *Database) InsertCanxiumAccount(account *model.CanxiumAccount) error {
+	if _, err := db.database.Model(account).Insert(); err != nil {
+		return err
+	}
+
 	return nil
 }
 

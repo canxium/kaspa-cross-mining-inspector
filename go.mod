@@ -1,4 +1,4 @@
-module github.com/kaspa-live/kaspa-graph-inspector/processing
+module github.com/kaspa-live/kaspa-graph-inspector
 
 go 1.23
 
@@ -87,4 +87,4 @@ require (
 )
 
 // replace github.com/kaspanet/kaspad => ../../../kaspanet/kaspad
-replace github.com/ethereum/go-ethereum => github.com/canxium/go-canxium v0.2.4-0.20241228234059-4b7b68e306be
+replace github.com/ethereum/go-ethereum => github.com/canxium/go-canxium v0.2.4-0.20250115073138-0d53dc8ed493

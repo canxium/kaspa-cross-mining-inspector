@@ -1,0 +1,14 @@
+version: '3'
+services:
+  merging:
+    image: "kaspa-merge-mining:latest"
+    command:
+      - "/app/merging"
+      - "--connection-string=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}?sslmode=disable"
+      - "--private-key=${CANXIUM_ACCOUNT_PRIVATE_KEY}"
+      - "--canxium-rpc=${CANXIUM_RPC}"
+      - "--kaspa-rpc=${KASPA_RPC}"
+      - "--canxium-helium-time=${CANXIUM_HELIUM_FORK_TIME}"
+      - "--mining-contract=${CANXIUM_MINING_CONTRACT}"
+    network_mode: host
+    restart: always

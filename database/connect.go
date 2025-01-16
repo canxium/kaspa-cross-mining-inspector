@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-pg/pg/extra/pgdebug/v10"
 	"github.com/go-pg/pg/v10"
-	"github.com/kaspa-live/kaspa-graph-inspector/processing/infrastructure/logging"
+	"github.com/kaspa-live/kaspa-graph-inspector/infrastructure/logging"
 	"github.com/pkg/errors"
 )
 

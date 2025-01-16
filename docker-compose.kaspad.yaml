@@ -1,0 +1,20 @@
+version: '3'
+services:
+  processing:
+    image: "kaspa-merge-mining:latest"
+    command:
+      - "/app/processing"
+      - "--connection-string=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}?sslmode=disable"
+      - "--private-key=${CANXIUM_ACCOUNT_PRIVATE_KEY}"
+      - "--canxium-rpc=${CANXIUM_RPC}"
+      - "--canxium-helium-time=${CANXIUM_HELIUM_FORK_TIME}"
+      - "--mining-contract=${CANXIUM_MINING_CONTRACT}"
+    network_mode: host
+    restart: always
+    volumes:
+      - kaspad:/root/.kgi-processing/
+    network_mode: host
+    restart: always
+
+volumes:
+  kaspad:
