@@ -28,7 +28,7 @@ var (
 	// DefaultAppDir is the default home directory for kaspad.
 	DefaultAppDir          = util.AppDir(appDataDirectory, false)
 	defaultDataDir         = filepath.Join(DefaultAppDir)
-	MinimumKaspaDifficulty = uint64(5214000)
+	MinimumKaspaDifficulty = uint64(100000)
 )
 
 type Flags struct {
@@ -43,11 +43,12 @@ type Flags struct {
 	ClearDB                  bool     `long:"clear-db" description:"Clear the PostgrSQL database and sync from scratch"`
 	LogLevel                 string   `short:"d" long:"loglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
 
-	PrivateKey     string `long:"private-key" description:"Private key of the account to submit merge mining transaction"`
-	CanxiumRpc     string `long:"canxium-rpc" description:"Canxium RPC endpoint"`
-	KaspaRpc       string `long:"kaspa-rpc" description:"Kaspa RPC endpoint"`
-	HeliumForkTime uint64 `long:"canxium-helium-time" description:"Canxium Helium fork time"`
-	MiningContract string `long:"mining-contract" description:"Canxium merge mining contract"`
+	PrivateKey             string `long:"private-key" description:"Private key of the account to submit merge mining transaction"`
+	CanxiumRpc             string `long:"canxium-rpc" description:"Canxium RPC endpoint"`
+	KaspaRpc               string `long:"kaspa-rpc" description:"Kaspa RPC endpoint"`
+	HeliumForkTime         uint64 `long:"canxium-helium-time" description:"Canxium Helium fork time"`
+	MiningContract         string `long:"mining-contract" description:"Canxium merge mining contract"`
+	MinimumKaspaDifficulty uint64 `long:"min-diff" description:"Canxium merge mining min diff"`
 
 	kaspaConfigPackage.NetworkFlags
 }
@@ -72,8 +73,9 @@ func cleanAndExpandPath(path string) string {
 
 func defaultFlags() *Flags {
 	return &Flags{
-		AppDir:   defaultDataDir,
-		LogLevel: defaultLogLevel,
+		AppDir:                 defaultDataDir,
+		LogLevel:               defaultLogLevel,
+		MinimumKaspaDifficulty: MinimumKaspaDifficulty,
 	}
 }
 

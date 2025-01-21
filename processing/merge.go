@@ -255,7 +255,7 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 			databaseBlock.IsValidBlock = false
 		} else {
 			databaseBlock.Difficulty = signedTx.MergeProof().Difficulty().Uint64()
-			if databaseBlock.Difficulty >= configPackage.MinimumKaspaDifficulty {
+			if databaseBlock.Difficulty >= p.config.MinimumKaspaDifficulty {
 				databaseBlock.IsValidBlock = true
 				databaseBlock.MergeTxSigner = p.account.address.Hex()
 				databaseBlock.MergeTxNonce = int64(p.account.nonce)
