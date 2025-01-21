@@ -326,7 +326,7 @@ func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlo
 	data = append(data, paddedAddress...)
 
 	signedTx, err := types.SignTx(types.NewTx(&types.MergeMiningTx{
-		ChainID:    big.NewInt(3003),
+		ChainID:    big.NewInt(p.config.CanxiumChainId),
 		Nonce:      p.account.nonce,
 		GasTipCap:  big.NewInt(0),
 		GasFeeCap:  big.NewInt(0),
@@ -337,7 +337,7 @@ func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlo
 		Data:       data,
 		Algorithm:  types.ScryptAlgorithm,
 		MergeProof: kaspaBock,
-	}), types.NewLondonSigner(big.NewInt(3003)), p.account.privateKey)
+	}), types.NewLondonSigner(big.NewInt(p.config.CanxiumChainId)), p.account.privateKey)
 	if err != nil {
 		return nil, common.Address{}, errors.Errorf("Failed to sign raw transaction error: %+v", err)
 	}

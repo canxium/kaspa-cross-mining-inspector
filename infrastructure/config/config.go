@@ -29,6 +29,7 @@ var (
 	DefaultAppDir          = util.AppDir(appDataDirectory, false)
 	defaultDataDir         = filepath.Join(DefaultAppDir)
 	MinimumKaspaDifficulty = uint64(100000)
+	CanxiumChainId         = int64(3003)
 )
 
 type Flags struct {
@@ -49,6 +50,7 @@ type Flags struct {
 	HeliumForkTime         uint64 `long:"canxium-helium-time" description:"Canxium Helium fork time"`
 	MiningContract         string `long:"mining-contract" description:"Canxium merge mining contract"`
 	MinimumKaspaDifficulty uint64 `long:"min-diff" description:"Canxium merge mining min diff"`
+	CanxiumChainId         int64  `long:"canxium-chainid" description:"Canxium chain Id"`
 
 	kaspaConfigPackage.NetworkFlags
 }
@@ -76,6 +78,7 @@ func defaultFlags() *Flags {
 		AppDir:                 defaultDataDir,
 		LogLevel:               defaultLogLevel,
 		MinimumKaspaDifficulty: MinimumKaspaDifficulty,
+		CanxiumChainId:         CanxiumChainId,
 	}
 }
 
