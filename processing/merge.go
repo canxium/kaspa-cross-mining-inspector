@@ -4,12 +4,15 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -172,6 +175,17 @@ func (m *MergeMining) SubmitTransactions() error {
 		}
 
 		for _, block := range *mergeBlocks {
+			receipt, err := m.ethClient.TransactionReceipt(context.Background(), common.HexToHash(block.MergeTxHash))
+			if err == nil && receipt != nil {
+				log.Infof("Transaction %s success, status: %d, included in block %d", block.MergeTxHash, receipt.Status, receipt.BlockNumber.Int64())
+				block.MergeTxSuccess = true
+				err = m.database.InsertMergeBlock(&block)
+				if err != nil {
+					return errors.Wrapf(err, "Could not upsert block %s", block.BlockHash)
+				}
+				continue
+			}
+
 			rawTxBytes, err := hex.DecodeString(block.MergeTxRaw[2:])
 			if err != nil {
 				log.Errorf("Failed to decode raw transaction: %v", err)
@@ -186,37 +200,19 @@ func (m *MergeMining) SubmitTransactions() error {
 				return err
 			}
 
-			log.Infof("Sending transaction to canxium, hash %s, block hash %s, nonce: %d", tx.Hash(), tx.MergeProof().BlockHash(), tx.Nonce())
+			log.Debugf("Sending transaction to canxium, hash %s, block hash %s, nonce: %d", tx.Hash(), tx.MergeProof().BlockHash(), tx.Nonce())
 			err = m.ethClient.SendTransaction(context.Background(), &tx)
-			if err != nil && err.Error() != "already known" && err.Error() != "nonce too low" {
-				log.Warnf("Failed to send merge mining transaction %s to canxium network, error: %s", tx.Hash(), err.Error())
-				return err
+			if err != nil && err.Error() != txpool.ErrAlreadyKnown.Error() {
+				// handle common error, and drop all tx belone to this signer, then restart to generate another signer
+				log.Debugf("Failed to send merge mining transaction %s to canxium network, droping, error: %s", tx.Hash(), err.Error())
+				block.IsValidBlock = false
+				if dbErr := m.database.InsertMergeBlock(&block); dbErr != nil {
+					return errors.Wrapf(err, "Could not insert block %s", block.BlockHash)
+				}
 			}
 		}
 
-		i := 0
-		for {
-			if i >= len(*mergeBlocks) {
-				break
-			}
-			block := (*mergeBlocks)[i]
-			receipt, err := m.ethClient.TransactionReceipt(context.Background(), common.HexToHash(block.MergeTxHash))
-			if err != nil && receipt == nil {
-				log.Debugf("Failed to get transaction %s receipt: %s", block.MergeTxHash, err.Error())
-				time.Sleep(time.Second)
-				continue
-			}
-
-			log.Infof("Transaction %s success, status: %d, included in block %d", block.MergeTxHash, receipt.Status, receipt.BlockNumber.Int64())
-			block.MergeTxSuccess = true
-			err = m.database.InsertMergeBlock(&block)
-			if err != nil {
-				return errors.Wrapf(err, "Could not upsert block %s", block.BlockHash)
-			}
-
-			i++
-		}
-
+		time.Sleep(1 * time.Second)
 	}
 }
 
@@ -266,21 +262,28 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 		}
 	}
 
+	if databaseBlock.IsValidBlock {
+		log.Infof("Inserted block %s to database, tx hash: %s, nonce: %d", blockHash, databaseBlock.MergeTxHash, databaseBlock.MergeTxNonce)
+		// Send to canxium network
+		err = p.ethClient.SendTransaction(context.Background(), signedTx)
+		if err == nil {
+			log.Infof("Sent transaction to canxium success, hash %s, nonce: %d", databaseBlock.MergeTxHash, databaseBlock.MergeTxNonce)
+			p.account.nonce += 1
+		} else {
+			log.Warnf("Failed to send tx %s | block hash %s to canxium network, error: %s", databaseBlock.MergeTxHash, blockHash, err.Error())
+			// This kaspa block aready sent to canxium, have to skip it and not increase the nonce
+			// Check to see if the error is the block itself, then skip this block
+			if err.Error() == txpool.ErrMergeTxAlreadyKnown.Error() || strings.Contains(err.Error(), "invalid merge mining transaction:") {
+				databaseBlock.IsValidBlock = false
+			} else {
+				return err
+			}
+		}
+	}
+
 	err = p.database.InsertMergeBlock(databaseBlock)
 	if err != nil {
 		return errors.Wrapf(err, "Could not insert block %s", blockHash)
-	}
-
-	if databaseBlock.IsValidBlock {
-		log.Infof("Inserted block %s to database, tx hash: %s, nonce: %d", blockHash, databaseBlock.MergeTxHash, databaseBlock.MergeTxNonce)
-		p.account.nonce += 1
-		// Send to canxium network
-		if signedTx.Nonce() != 0 {
-			err = p.ethClient.SendTransaction(context.Background(), signedTx)
-			if err != nil {
-				log.Warnf("Failed to send merge mining transaction to canxium network, error: %s", err.Error())
-			}
-		}
 	}
 
 	return nil
@@ -311,7 +314,7 @@ func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlo
 
 	value := misc.MergeMiningReward(kaspaBock, p.config.HeliumForkTime, uint64(time.Now().Unix()))
 
-	mineFnSignature := []byte("mergeMining(address)")
+	mineFnSignature := []byte("mergeMining(address,uint16,uint256)")
 	hash := sha3.NewLegacyKeccak256()
 	hash.Write(mineFnSignature)
 	methodID := hash.Sum(nil)[:4]
@@ -320,10 +323,22 @@ func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlo
 	if err != nil {
 		return nil, common.Address{}, err
 	}
-	var data []byte
 	paddedAddress := common.LeftPadBytes(receiver.Bytes(), 32)
+	timestamp := big.NewInt(block.Header.TimeInMilliseconds()) // Replace with the actual timestamp
+	chain := types.KaspaChain
+	// Convert the chain ID to a hexadecimal value and pad it to 32 bytes
+	chainHex := fmt.Sprintf("%04x", chain)                             // Convert uint16 to a 4-character hex string
+	chainPadded, _ := hex.DecodeString(fmt.Sprintf("%064s", chainHex)) // Pad with leading zeros to 32 bytes
+
+	// Timestamp (uint256) is padded to 32 bytes
+	timestampPadded := make([]byte, 32)
+	timestamp.FillBytes(timestampPadded)
+
+	var data []byte
 	data = append(data, methodID...)
 	data = append(data, paddedAddress...)
+	data = append(data, chainPadded...)
+	data = append(data, timestampPadded...)
 
 	signedTx, err := types.SignTx(types.NewTx(&types.MergeMiningTx{
 		ChainID:    big.NewInt(p.config.CanxiumChainId),

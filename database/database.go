@@ -158,7 +158,7 @@ func (db *Database) GetUnProcessMergeBlock() (*model.MergeBlock, error) {
 
 func (db *Database) GetPendingMergeBlocks() (*[]model.MergeBlock, error) {
 	result := new([]model.MergeBlock)
-	_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE merge_tx_hash is not null and is_valid_block = true and merge_tx_success = false order by timestamp asc limit 10")
+	_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE merge_tx_hash is not null and is_valid_block = true and merge_tx_success = false order by timestamp asc limit 50")
 	if err != nil {
 		return nil, err
 	}
