@@ -200,7 +200,7 @@ func (m *MergeMining) SubmitTransactions() error {
 				return err
 			}
 
-			log.Debugf("Sending transaction to canxium, hash %s, block hash %s, nonce: %d", tx.Hash(), tx.MergeProof().BlockHash(), tx.Nonce())
+			log.Debugf("Sending transaction to canxium, hash %s, block hash %s, nonce: %d", tx.Hash(), tx.AuxPoW().BlockHash(), tx.Nonce())
 			err = m.ethClient.SendTransaction(context.Background(), &tx)
 			if err != nil && err.Error() != txpool.ErrAlreadyKnown.Error() {
 				// handle common error, and drop all tx belone to this signer, then restart to generate another signer
@@ -250,7 +250,7 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 			log.Warnf("Invalid block %s, same timestamp block existed in database: %d", databaseBlock.BlockHash, databaseBlock.Timestamp)
 			databaseBlock.IsValidBlock = false
 		} else {
-			databaseBlock.Difficulty = signedTx.MergeProof().Difficulty().Uint64()
+			databaseBlock.Difficulty = signedTx.AuxPoW().Difficulty().Uint64()
 			if databaseBlock.Difficulty >= p.config.MinimumKaspaDifficulty {
 				databaseBlock.IsValidBlock = true
 				databaseBlock.MergeTxSigner = p.account.address.Hex()
@@ -341,17 +341,16 @@ func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlo
 	data = append(data, timestampPadded...)
 
 	signedTx, err := types.SignTx(types.NewTx(&types.MergeMiningTx{
-		ChainID:    big.NewInt(p.config.CanxiumChainId),
-		Nonce:      p.account.nonce,
-		GasTipCap:  big.NewInt(0),
-		GasFeeCap:  big.NewInt(0),
-		Gas:        100000,
-		From:       p.account.address,
-		To:         common.HexToAddress(p.config.MiningContract),
-		Value:      value,
-		Data:       data,
-		Algorithm:  types.ScryptAlgorithm,
-		MergeProof: kaspaBock,
+		ChainID:   big.NewInt(p.config.CanxiumChainId),
+		Nonce:     p.account.nonce,
+		GasTipCap: big.NewInt(0),
+		GasFeeCap: big.NewInt(0),
+		Gas:       100000,
+		From:      p.account.address,
+		To:        common.HexToAddress(p.config.MiningContract),
+		Value:     value,
+		Data:      data,
+		AuxPoW:    kaspaBock,
 	}), types.NewLondonSigner(big.NewInt(p.config.CanxiumChainId)), p.account.privateKey)
 	if err != nil {
 		return nil, common.Address{}, errors.Errorf("Failed to sign raw transaction error: %+v", err)
