@@ -143,8 +143,12 @@ func (m *MergeMining) Start() error {
 
 		b, err := m.kaspaClient.GetBlock(mergeBlock.BlockHash, true)
 		if err != nil || b.Error != nil {
+			mergeBlock.IsValidBlock = false
+			if err := m.database.InsertMergeBlock(mergeBlock); err != nil {
+				return errors.Wrapf(err, "Could not insert block %s", mergeBlock.BlockHash)
+			}
+
 			log.Errorf("Failed to get block info from kaspa node, error: %+v, block error: %+v", err, b)
-			time.Sleep(time.Second)
 			continue
 		}
 
