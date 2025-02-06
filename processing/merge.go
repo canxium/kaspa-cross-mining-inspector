@@ -241,31 +241,31 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 		return errors.Wrapf(err, "Could not build merge mining transaction for block %s, error: %+v, miner: %s", blockHash, err, minerAddress)
 	}
 
-	if strings.EqualFold(minerAddress.String(), p.config.MinerAddress) {
-		return nil
-	}
-
-	if err != nil && minerAddress == zeroAddress {
+	if !strings.EqualFold(minerAddress.String(), p.config.MinerAddress) {
 		databaseBlock.IsValidBlock = false
-	} else if signedTx != nil {
-		rawTx, err := signedTx.MarshalBinary()
-		if err != nil {
-			return errors.Errorf("Failed to marshal binary raw transaction error: %+v", err)
-		}
-
-		isExistSameBlock := p.database.IsExistSameBlockMinerAndTimeStamp(minerAddress.String(), databaseBlock.Timestamp)
-		if isExistSameBlock {
-			log.Warnf("Invalid block %s, same timestamp block existed in database: %d", databaseBlock.BlockHash, databaseBlock.Timestamp)
+	} else {
+		if err != nil && minerAddress == zeroAddress {
 			databaseBlock.IsValidBlock = false
-		} else {
-			databaseBlock.Difficulty = signedTx.AuxPoW().Difficulty().Uint64()
-			if databaseBlock.Difficulty >= p.config.MinimumKaspaDifficulty {
-				databaseBlock.IsValidBlock = true
-				databaseBlock.MergeTxSigner = p.account.address.Hex()
-				databaseBlock.MergeTxNonce = int64(p.account.nonce)
-				databaseBlock.MergeTxRaw = "0x" + hex.EncodeToString(rawTx)
-				databaseBlock.MergeTxHash = signedTx.Hash().Hex()
-				databaseBlock.Miner = minerAddress.String()
+		} else if signedTx != nil {
+			rawTx, err := signedTx.MarshalBinary()
+			if err != nil {
+				return errors.Errorf("Failed to marshal binary raw transaction error: %+v", err)
+			}
+
+			isExistSameBlock := p.database.IsExistSameBlockMinerAndTimeStamp(minerAddress.String(), databaseBlock.Timestamp)
+			if isExistSameBlock {
+				log.Warnf("Invalid block %s, same timestamp block existed in database: %d", databaseBlock.BlockHash, databaseBlock.Timestamp)
+				databaseBlock.IsValidBlock = false
+			} else {
+				databaseBlock.Difficulty = signedTx.AuxPoW().Difficulty().Uint64()
+				if databaseBlock.Difficulty >= p.config.MinimumKaspaDifficulty {
+					databaseBlock.IsValidBlock = true
+					databaseBlock.MergeTxSigner = p.account.address.Hex()
+					databaseBlock.MergeTxNonce = int64(p.account.nonce)
+					databaseBlock.MergeTxRaw = "0x" + hex.EncodeToString(rawTx)
+					databaseBlock.MergeTxHash = signedTx.Hash().Hex()
+					databaseBlock.Miner = minerAddress.String()
+				}
 			}
 		}
 	}
