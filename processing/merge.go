@@ -241,6 +241,10 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 		return errors.Wrapf(err, "Could not build merge mining transaction for block %s, error: %+v, miner: %s", blockHash, err, minerAddress)
 	}
 
+	if strings.EqualFold(minerAddress.String(), p.config.MinerAddress) {
+		return nil
+	}
+
 	if err != nil && minerAddress == zeroAddress {
 		databaseBlock.IsValidBlock = false
 	} else if signedTx != nil {

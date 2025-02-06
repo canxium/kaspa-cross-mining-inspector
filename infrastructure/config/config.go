@@ -51,6 +51,7 @@ type Flags struct {
 	MiningContract         string `long:"mining-contract" description:"Canxium merge mining contract"`
 	MinimumKaspaDifficulty uint64 `long:"min-diff" description:"Canxium merge mining min diff"`
 	CanxiumChainId         int64  `long:"canxium-chainid" description:"Canxium chain Id"`
+	MinerAddress           string `long:"miner-address" description:"Canxium miner address to filter the block"`
 
 	kaspaConfigPackage.NetworkFlags
 }
