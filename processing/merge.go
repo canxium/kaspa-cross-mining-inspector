@@ -320,9 +320,9 @@ func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlo
 		Coinbase:    block.Transactions[0],
 	}
 
-	value := misc.MergeMiningReward(kaspaBock, p.config.HeliumForkTime, uint64(time.Now().Unix()))
+	value := misc.CrossMiningReward(kaspaBock, p.config.HeliumForkTime, uint64(time.Now().Unix()))
 
-	mineFnSignature := []byte("mergeMining(address,uint16,uint256)")
+	mineFnSignature := []byte("crossChainMining(address,uint16,uint256)")
 	hash := sha3.NewLegacyKeccak256()
 	hash.Write(mineFnSignature)
 	methodID := hash.Sum(nil)[:4]
@@ -348,7 +348,7 @@ func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlo
 	data = append(data, chainPadded...)
 	data = append(data, timestampPadded...)
 
-	signedTx, err := types.SignTx(types.NewTx(&types.MergeMiningTx{
+	signedTx, err := types.SignTx(types.NewTx(&types.CrossMiningTx{
 		ChainID:   big.NewInt(p.config.CanxiumChainId),
 		Nonce:     p.account.nonce,
 		GasTipCap: big.NewInt(0),

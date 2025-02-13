@@ -11,5 +11,6 @@ services:
       - "--canxium-helium-time=${CANXIUM_HELIUM_FORK_TIME}"
       - "--mining-contract=${CANXIUM_MINING_CONTRACT}"
       - "--canxium-chainid=${CANXIUM_CHAIN_ID}"
+      - "--miner-address=${CANXIUM_MINER_ADDRESS}"
     network_mode: host
     restart: always
