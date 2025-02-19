@@ -30,6 +30,11 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+const (
+	// prefix of kaspa miner in the coinbase transaction payload. To extract the canxium address
+	minerTagPrefix = "canxiuminer:"
+)
+
 var zeroAddress = common.Address{}
 
 type Account struct {
@@ -221,14 +226,9 @@ func (m *MergeMining) SubmitTransactions() error {
 }
 
 func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
-	if len(block.Transactions) <= 0 {
-		return nil
-	}
-
 	blockHash := consensushashing.BlockHash(block)
 	log.Debugf("Processing block %s", blockHash)
 	defer log.Debugf("Finished processing block %s", blockHash)
-
 	databaseBlock := &model.MergeBlock{
 		BlockHash:      blockHash.String(),
 		Timestamp:      block.Header.TimeInMilliseconds(),
@@ -236,60 +236,62 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 		MergeTxSuccess: false,
 	}
 
-	signedTx, minerAddress, err := p.blockToMergeMiningTransaction(block)
-	if err != nil && minerAddress != zeroAddress {
-		return errors.Wrapf(err, "Could not build merge mining transaction for block %s, error: %+v, miner: %s", blockHash, err, minerAddress)
-	}
+	if len(block.Transactions) > 0 && p.isValidCrossMiningBlock(block) {
+		signedTx, minerAddress, err := p.blockToMergeMiningTransaction(block)
+		if err != nil && minerAddress != zeroAddress {
+			return errors.Wrapf(err, "Could not build merge mining transaction for block %s, error: %+v, miner: %s", blockHash, err, minerAddress)
+		}
 
-	if !strings.EqualFold(minerAddress.String(), p.config.MinerAddress) {
-		databaseBlock.IsValidBlock = false
-	} else {
-		if err != nil && minerAddress == zeroAddress {
+		if !strings.EqualFold(minerAddress.String(), p.config.MinerAddress) {
 			databaseBlock.IsValidBlock = false
-		} else if signedTx != nil {
-			rawTx, err := signedTx.MarshalBinary()
-			if err != nil {
-				return errors.Errorf("Failed to marshal binary raw transaction error: %+v", err)
-			}
-
-			isExistSameBlock := p.database.IsExistSameBlockMinerAndTimeStamp(minerAddress.String(), databaseBlock.Timestamp)
-			if isExistSameBlock {
-				log.Warnf("Invalid block %s, same timestamp block existed in database: %d", databaseBlock.BlockHash, databaseBlock.Timestamp)
+		} else {
+			if err != nil && minerAddress == zeroAddress {
 				databaseBlock.IsValidBlock = false
+			} else if signedTx != nil {
+				rawTx, err := signedTx.MarshalBinary()
+				if err != nil {
+					return errors.Errorf("Failed to marshal binary raw transaction error: %+v", err)
+				}
+
+				isExistSameBlock := p.database.IsExistSameBlockMinerAndTimeStamp(minerAddress.String(), databaseBlock.Timestamp)
+				if isExistSameBlock {
+					log.Warnf("Invalid block %s, same timestamp block existed in database: %d", databaseBlock.BlockHash, databaseBlock.Timestamp)
+					databaseBlock.IsValidBlock = false
+				} else {
+					databaseBlock.Difficulty = signedTx.AuxPoW().Difficulty().Uint64()
+					if databaseBlock.Difficulty >= p.config.MinimumKaspaDifficulty {
+						databaseBlock.IsValidBlock = true
+						databaseBlock.MergeTxSigner = p.account.address.Hex()
+						databaseBlock.MergeTxNonce = int64(p.account.nonce)
+						databaseBlock.MergeTxRaw = "0x" + hex.EncodeToString(rawTx)
+						databaseBlock.MergeTxHash = signedTx.Hash().Hex()
+						databaseBlock.Miner = minerAddress.String()
+					}
+				}
+			}
+		}
+
+		if databaseBlock.IsValidBlock {
+			log.Infof("Inserted block %s to database, tx hash: %s, nonce: %d", blockHash, databaseBlock.MergeTxHash, databaseBlock.MergeTxNonce)
+			// Send to canxium network
+			err = p.ethClient.SendTransaction(context.Background(), signedTx)
+			if err == nil {
+				log.Infof("Sent transaction to canxium success, hash %s, nonce: %d", databaseBlock.MergeTxHash, databaseBlock.MergeTxNonce)
+				p.account.nonce += 1
 			} else {
-				databaseBlock.Difficulty = signedTx.AuxPoW().Difficulty().Uint64()
-				if databaseBlock.Difficulty >= p.config.MinimumKaspaDifficulty {
-					databaseBlock.IsValidBlock = true
-					databaseBlock.MergeTxSigner = p.account.address.Hex()
-					databaseBlock.MergeTxNonce = int64(p.account.nonce)
-					databaseBlock.MergeTxRaw = "0x" + hex.EncodeToString(rawTx)
-					databaseBlock.MergeTxHash = signedTx.Hash().Hex()
-					databaseBlock.Miner = minerAddress.String()
+				log.Warnf("Failed to send tx %s | block hash %s to canxium network, error: %s", databaseBlock.MergeTxHash, blockHash, err.Error())
+				// This kaspa block aready sent to canxium, have to skip it and not increase the nonce
+				// Check to see if the error is the block itself, then skip this block
+				if err.Error() == txpool.ErrMergeTxAlreadyKnown.Error() || strings.Contains(err.Error(), "invalid merge mining transaction:") {
+					databaseBlock.IsValidBlock = false
+				} else {
+					return err
 				}
 			}
 		}
 	}
 
-	if databaseBlock.IsValidBlock {
-		log.Infof("Inserted block %s to database, tx hash: %s, nonce: %d", blockHash, databaseBlock.MergeTxHash, databaseBlock.MergeTxNonce)
-		// Send to canxium network
-		err = p.ethClient.SendTransaction(context.Background(), signedTx)
-		if err == nil {
-			log.Infof("Sent transaction to canxium success, hash %s, nonce: %d", databaseBlock.MergeTxHash, databaseBlock.MergeTxNonce)
-			p.account.nonce += 1
-		} else {
-			log.Warnf("Failed to send tx %s | block hash %s to canxium network, error: %s", databaseBlock.MergeTxHash, blockHash, err.Error())
-			// This kaspa block aready sent to canxium, have to skip it and not increase the nonce
-			// Check to see if the error is the block itself, then skip this block
-			if err.Error() == txpool.ErrMergeTxAlreadyKnown.Error() || strings.Contains(err.Error(), "invalid merge mining transaction:") {
-				databaseBlock.IsValidBlock = false
-			} else {
-				return err
-			}
-		}
-	}
-
-	err = p.database.InsertMergeBlock(databaseBlock)
+	err := p.database.InsertMergeBlock(databaseBlock)
 	if err != nil {
 		return errors.Wrapf(err, "Could not insert block %s", blockHash)
 	}
@@ -313,11 +315,12 @@ func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlo
 		block.Header.PruningPoint(),
 	)
 
-	proof := GenerateMerkleProofForCoinbase(block.Transactions)
+	proof := GenerateMerkleProofForCoinbase(block.Transactions, p.config.StorageMassActivated)
 	kaspaBock := &types.KaspaBlock{
-		Header:      &blockHeader,
-		MerkleProof: proof,
-		Coinbase:    block.Transactions[0],
+		Header:               &blockHeader,
+		MerkleProof:          proof,
+		Coinbase:             block.Transactions[0],
+		StorageMassActivated: p.config.StorageMassActivated,
 	}
 
 	value := misc.CrossMiningReward(kaspaBock, p.config.HeliumForkTime, uint64(time.Now().Unix()))
@@ -365,4 +368,23 @@ func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlo
 	}
 
 	return signedTx, receiver, nil
+}
+
+func (m *MergeMining) isValidCrossMiningBlock(block *externalapi.DomainBlock) bool {
+	if len(block.Transactions) <= 0 {
+		return false
+	}
+
+	payload := block.Transactions[0].Payload
+	tagLength := len(minerTagPrefix) + 40 // 40 characters for the address
+	if len(payload) < tagLength {
+		// Payload is too short to contain a valid tag
+		return false
+	}
+
+	// Extract the last part of the payload
+	tag := string(payload[len(payload)-tagLength:])
+
+	// Validate the prefix
+	return strings.HasPrefix(tag, minerTagPrefix)
 }

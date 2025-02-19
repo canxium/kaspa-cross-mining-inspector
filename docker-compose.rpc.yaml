@@ -12,5 +12,6 @@ services:
       - "--mining-contract=${CANXIUM_MINING_CONTRACT}"
       - "--canxium-chainid=${CANXIUM_CHAIN_ID}"
       - "--miner-address=${CANXIUM_MINER_ADDRESS}"
+      # - "--mass-activated"
     network_mode: host
     restart: always

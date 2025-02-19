@@ -582,11 +582,11 @@ func (p *Processing) getBlocksDAAScores(databaseTransaction *pg.Tx, blockHashes 
 }
 
 // GenerateMerkleProofForFirstTransaction calculates the merkle root path, to verify coinbase transaction is included in the merkle root
-func GenerateMerkleProofForCoinbase(transactions []*externalapi.DomainTransaction) []*externalapi.DomainHash {
+func GenerateMerkleProofForCoinbase(transactions []*externalapi.DomainTransaction, massActivated bool) []*externalapi.DomainHash {
 	// If there is only one hash, no proof is needed
 	txHashes := make([]*externalapi.DomainHash, len(transactions))
 	for i, tx := range transactions {
-		txHashes[i] = consensushashing.TransactionHash(tx)
+		txHashes[i] = consensushashing.TransactionHashWithMass(tx, massActivated)
 	}
 
 	if len(txHashes) <= 1 {
