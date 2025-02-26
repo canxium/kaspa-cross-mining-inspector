@@ -73,8 +73,8 @@ github.com/btcsuite/btcutil v1.0.2 h1:9iZ1Terx9fMIOtq1VrwdqfsATL9MC2l8ZrUY6YZ2ut
 github.com/btcsuite/btcutil v1.0.2/go.mod h1:j9HUFwoQRsZL3V4n+qG+CUnEGHOarIxfC3Le2Yhbcts=
 github.com/btcsuite/go-socks v0.0.0-20170105172521-4720035b7bfd h1:R/opQEbFEy9JGkIguV40SvRY1uliPX8ifOvi6ICsFCw=
 github.com/btcsuite/go-socks v0.0.0-20170105172521-4720035b7bfd/go.mod h1:HHNXQzUsZCxOoE+CPiyCTO6x34Zs86zZUiwtpXoGdtg=
-github.com/canxium/go-canxium v0.3.2 h1:zd4JQ7tUBhUVXB4vfj21BY0IYkj2RQ9AkPCPMmj0ews=
-github.com/canxium/go-canxium v0.3.2/go.mod h1:/H0zIxz5k7q73BQnphUdYezffEfMfpAXGURlU5Hh0TY=
+github.com/canxium/go-canxium v0.0.0-20250226071237-6f81ff16caab h1:fRYhbc4yCW8Rn4LhFAzGWfmSGoNMEArZjoyz5Jw5Du4=
+github.com/canxium/go-canxium v0.0.0-20250226071237-6f81ff16caab/go.mod h1:/H0zIxz5k7q73BQnphUdYezffEfMfpAXGURlU5Hh0TY=
 github.com/canxium/kaspad v0.12.19 h1:e6e6/C5ybs8lA5VwvWfNj07J7JGAxixBDOvRXnhbKLE=
 github.com/canxium/kaspad v0.12.19/go.mod h1:yu3Bciz4cRVItIcBcDKMuLHg5/FOMzd7EaXxNHMXgSY=
 github.com/cenkalti/backoff/v4 v4.0.2/go.mod h1:eEew/i+1Q6OrCDZh3WiXYv3+nJwBASZ8Bog/87DQnVg=

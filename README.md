@@ -24,4 +24,4 @@ For development, it's recommended to run from within Docker
    2. POSTGRES_PASSWORD=password
    3. POSTGRES_DB=database-name
 
-4. Run: `docker compose -f docker-compose.yaml up -d`
+4. Run: `docker compose -f docker-compose.rpc.yaml up -d`

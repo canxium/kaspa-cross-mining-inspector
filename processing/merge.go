@@ -12,7 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -139,36 +139,40 @@ func NewMergeMining(config *configPackage.Config, database *databasePackage.Data
 
 func (m *MergeMining) Start() error {
 	for {
-		mergeBlock, err := m.database.GetUnProcessMergeBlock()
+		mergeBlocks, err := m.database.GetUnProcessMergeBlocks()
 		if err != nil {
-			log.Tracef("Failed to query new merge block from database, sleep 3s, error: %s", err.Error())
+			log.Warnf("Failed to query new merge block from database, sleep 3s, error: %s", err.Error())
 			time.Sleep(3 * time.Second)
 			continue
 		}
 
-		b, err := m.kaspaClient.GetBlock(mergeBlock.BlockHash, true)
-		if err != nil || b.Error != nil {
-			mergeBlock.IsValidBlock = false
-			if err := m.database.InsertMergeBlock(mergeBlock); err != nil {
-				return errors.Wrapf(err, "Could not insert block %s", mergeBlock.BlockHash)
+		for _, block := range *mergeBlocks {
+			b, err := m.kaspaClient.GetBlock(block.BlockHash, true)
+			if err != nil || b.Error != nil {
+				block.IsValidBlock = false
+				if err := m.database.InsertMergeBlock(&block); err != nil {
+					return errors.Wrapf(err, "Could not insert block %s", block.BlockHash)
+				}
+
+				log.Errorf("Failed to get block info from kaspa node, error: %+v, block error: %+v", err, b)
+				continue
 			}
 
-			log.Errorf("Failed to get block info from kaspa node, error: %+v, block error: %+v", err, b)
-			continue
+			domainBlock, err := appmessage.RPCBlockToDomainBlock(b.Block)
+			if err != nil {
+				log.Errorf("Failed to convert rpc block to domain block, error: %+v", err)
+				time.Sleep(time.Second)
+				continue
+			}
+
+			if err := m.processBlock(domainBlock); err != nil {
+				log.Errorf("Failed to process merge block, error: %+v", err)
+				time.Sleep(time.Second)
+				continue
+			}
 		}
 
-		block, err := appmessage.RPCBlockToDomainBlock(b.Block)
-		if err != nil {
-			log.Errorf("Failed to convert rpc block to domain block, error: %+v", err)
-			time.Sleep(time.Second)
-			continue
-		}
-
-		if err := m.processBlock(block); err != nil {
-			log.Errorf("Failed to process merge block, error: %+v", err)
-			time.Sleep(time.Second)
-			continue
-		}
+		time.Sleep(200 * time.Microsecond)
 	}
 }
 
@@ -177,51 +181,64 @@ func (m *MergeMining) SubmitTransactions() error {
 	for {
 		mergeBlocks, err := m.database.GetPendingMergeBlocks()
 		if err != nil {
-			log.Tracef("Failed to query pending merge block from database, sleep 3s, error: %s", err.Error())
+			log.Warnf("Failed to query pending merge block from database, sleep 3s, error: %s", err.Error())
 			time.Sleep(3 * time.Second)
-			return err
-			// continue
+			continue
+		}
+
+		nonce, err := m.ethClient.NonceAt(context.Background(), m.account.address, nil)
+		if err != nil {
+			log.Errorf("Failed to query account nonce, sleep 3s, error: %s", err.Error())
+			time.Sleep(3 * time.Second)
+			continue
 		}
 
 		for _, block := range *mergeBlocks {
-			receipt, err := m.ethClient.TransactionReceipt(context.Background(), common.HexToHash(block.MergeTxHash))
-			if err == nil && receipt != nil {
-				log.Infof("Transaction %s success, status: %d, included in block %d", block.MergeTxHash, receipt.Status, receipt.BlockNumber.Int64())
+			if receipt, _ := m.ethClient.TransactionReceiptByAuxPoWHash(context.Background(), block.BlockHash); receipt != nil {
+				log.Infof("Transaction %s success, kaspa block hash: %s, status: %d, included in block %d", receipt.TxHash, block.BlockHash, receipt.Status, receipt.BlockNumber.Int64())
 				block.MergeTxSuccess = true
-				err = m.database.InsertMergeBlock(&block)
-				if err != nil {
+				block.MergeTxHash = receipt.TxHash.String()
+				if err := m.database.InsertMergeBlock(&block); err != nil {
 					return errors.Wrapf(err, "Could not upsert block %s", block.BlockHash)
 				}
 				continue
 			}
 
-			rawTxBytes, err := hex.DecodeString(block.MergeTxRaw[2:])
-			if err != nil {
-				log.Errorf("Failed to decode raw transaction: %v", err)
-				return err
+			b, err := m.kaspaClient.GetBlock(block.BlockHash, true)
+			if err != nil || b.Error != nil {
+				log.Errorf("Failed to get block info from kaspa node, error: %+v, block error: %+v", err, b)
+				continue
 			}
 
-			var tx types.Transaction
-			// Unmarshal the raw transaction using UnmarshalBinary
-			err = tx.UnmarshalBinary(rawTxBytes)
+			auxBlock, err := appmessage.RPCBlockToDomainBlock(b.Block)
 			if err != nil {
-				log.Errorf("Failed to unmarshal transaction: %v", err)
-				return err
+				log.Errorf("Failed to convert rpc block to domain block, error: %+v", err)
+				continue
 			}
 
-			log.Debugf("Sending transaction to canxium, hash %s, block hash %s, nonce: %d", tx.Hash(), tx.AuxPoW().BlockHash(), tx.Nonce())
-			err = m.ethClient.SendTransaction(context.Background(), &tx)
-			if err != nil && err.Error() != txpool.ErrAlreadyKnown.Error() {
-				// handle common error, and drop all tx belone to this signer, then restart to generate another signer
-				log.Debugf("Failed to send merge mining transaction %s to canxium network, droping, error: %s", tx.Hash(), err.Error())
+			signedTx, _, err := m.blockToMergeMiningTransaction(auxBlock, nonce)
+			if err != nil {
+				log.Errorf("Could not build merge mining transaction for block %s, error: %+v", block.BlockHash, err)
+				continue
+			}
+
+			log.Infof("Sending transaction to canxium, hash %s, block hash %s, nonce: %d", signedTx.Hash(), signedTx.AuxPoW().BlockHash(), signedTx.Nonce())
+			err = m.ethClient.SendTransaction(context.Background(), signedTx)
+			if err == nil {
+				log.Infof("Sent transaction to canxium, hash %s, block hash %s, nonce: %d", signedTx.Hash(), signedTx.AuxPoW().BlockHash(), signedTx.Nonce())
+				nonce += 1
+				continue
+			}
+			if err == core.ErrCrossMiningTimestampTooLow {
+				log.Warnf("Ignore block %s because of timestamp too low: %d", block.BlockHash, block.Timestamp)
 				block.IsValidBlock = false
-				if dbErr := m.database.InsertMergeBlock(&block); dbErr != nil {
-					return errors.Wrapf(err, "Could not insert block %s", block.BlockHash)
+				if err := m.database.InsertMergeBlock(&block); err != nil {
+					return errors.Wrapf(err, "Could not upsert block %s", block.BlockHash)
 				}
 			}
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(3 * time.Second)
 	}
 }
 
@@ -237,57 +254,28 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 	}
 
 	if len(block.Transactions) > 0 && p.isValidCrossMiningBlock(block) {
-		signedTx, minerAddress, err := p.blockToMergeMiningTransaction(block)
-		if err != nil && minerAddress != zeroAddress {
-			return errors.Wrapf(err, "Could not build merge mining transaction for block %s, error: %+v, miner: %s", blockHash, err, minerAddress)
-		}
-
-		if !strings.EqualFold(minerAddress.String(), p.config.MinerAddress) {
+		signedTx, minerAddress, err := p.blockToMergeMiningTransaction(block, 0)
+		if err != nil {
+			log.Errorf("Could not build merge mining transaction for block %s, error: %+v", blockHash, err)
 			databaseBlock.IsValidBlock = false
-		} else {
-			if err != nil && minerAddress == zeroAddress {
+		} else if p.config.MinerAddress != "" && !strings.EqualFold(minerAddress.String(), p.config.MinerAddress) {
+			databaseBlock.IsValidBlock = false
+		} else if signedTx != nil {
+			isExistSameBlock := p.database.IsExistSameBlockMinerAndTimeStamp(minerAddress.String(), databaseBlock.Timestamp)
+			if isExistSameBlock {
+				log.Warnf("Invalid block %s, same timestamp block existed in database: %d", databaseBlock.BlockHash, databaseBlock.Timestamp)
 				databaseBlock.IsValidBlock = false
-			} else if signedTx != nil {
-				rawTx, err := signedTx.MarshalBinary()
-				if err != nil {
-					return errors.Errorf("Failed to marshal binary raw transaction error: %+v", err)
-				}
-
-				isExistSameBlock := p.database.IsExistSameBlockMinerAndTimeStamp(minerAddress.String(), databaseBlock.Timestamp)
-				if isExistSameBlock {
-					log.Warnf("Invalid block %s, same timestamp block existed in database: %d", databaseBlock.BlockHash, databaseBlock.Timestamp)
-					databaseBlock.IsValidBlock = false
-				} else {
-					databaseBlock.Difficulty = signedTx.AuxPoW().Difficulty().Uint64()
-					if databaseBlock.Difficulty >= p.config.MinimumKaspaDifficulty {
-						databaseBlock.IsValidBlock = true
-						databaseBlock.MergeTxSigner = p.account.address.Hex()
-						databaseBlock.MergeTxNonce = int64(p.account.nonce)
-						databaseBlock.MergeTxRaw = "0x" + hex.EncodeToString(rawTx)
-						databaseBlock.MergeTxHash = signedTx.Hash().Hex()
-						databaseBlock.Miner = minerAddress.String()
-					}
+			} else {
+				databaseBlock.Difficulty = signedTx.AuxPoW().Difficulty().Uint64()
+				if databaseBlock.Difficulty >= p.config.MinimumKaspaDifficulty {
+					databaseBlock.IsValidBlock = true
+					databaseBlock.Miner = minerAddress.String()
 				}
 			}
 		}
 
 		if databaseBlock.IsValidBlock {
-			log.Infof("Inserted block %s to database, tx hash: %s, nonce: %d", blockHash, databaseBlock.MergeTxHash, databaseBlock.MergeTxNonce)
-			// Send to canxium network
-			err = p.ethClient.SendTransaction(context.Background(), signedTx)
-			if err == nil {
-				log.Infof("Sent transaction to canxium success, hash %s, nonce: %d", databaseBlock.MergeTxHash, databaseBlock.MergeTxNonce)
-				p.account.nonce += 1
-			} else {
-				log.Warnf("Failed to send tx %s | block hash %s to canxium network, error: %s", databaseBlock.MergeTxHash, blockHash, err.Error())
-				// This kaspa block aready sent to canxium, have to skip it and not increase the nonce
-				// Check to see if the error is the block itself, then skip this block
-				if err.Error() == txpool.ErrMergeTxAlreadyKnown.Error() || strings.Contains(err.Error(), "invalid merge mining transaction:") {
-					databaseBlock.IsValidBlock = false
-				} else {
-					return err
-				}
-			}
+			log.Infof("Inserted valid kaspa block %s to database, miner %s", blockHash, databaseBlock.Miner)
 		}
 	}
 
@@ -299,7 +287,7 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 	return nil
 }
 
-func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlock) (*types.Transaction, common.Address, error) {
+func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlock, nonce uint64) (*types.Transaction, common.Address, error) {
 	blockHeader := types.NewImmutableKaspaBlockHeader(
 		block.Header.Version(),
 		block.Header.Parents(),
@@ -332,7 +320,7 @@ func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlo
 
 	receiver, err := kaspaBock.GetMinerAddress()
 	if err != nil {
-		return nil, common.Address{}, err
+		return nil, zeroAddress, err
 	}
 	paddedAddress := common.LeftPadBytes(receiver.Bytes(), 32)
 	timestamp := big.NewInt(block.Header.TimeInMilliseconds()) // Replace with the actual timestamp
@@ -353,7 +341,7 @@ func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlo
 
 	signedTx, err := types.SignTx(types.NewTx(&types.CrossMiningTx{
 		ChainID:   big.NewInt(p.config.CanxiumChainId),
-		Nonce:     p.account.nonce,
+		Nonce:     nonce,
 		GasTipCap: big.NewInt(0),
 		GasFeeCap: big.NewInt(0),
 		Gas:       100000,
@@ -364,7 +352,7 @@ func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlo
 		AuxPoW:    kaspaBock,
 	}), types.NewLondonSigner(big.NewInt(p.config.CanxiumChainId)), p.account.privateKey)
 	if err != nil {
-		return nil, common.Address{}, errors.Errorf("Failed to sign raw transaction error: %+v", err)
+		return nil, zeroAddress, errors.Errorf("Failed to sign raw transaction error: %+v", err)
 	}
 
 	return signedTx, receiver, nil
