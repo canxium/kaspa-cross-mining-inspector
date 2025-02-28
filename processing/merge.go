@@ -222,10 +222,10 @@ func (m *MergeMining) SubmitTransactions() error {
 				continue
 			}
 
-			log.Infof("Sending transaction to canxium, hash %s, block hash %s, nonce: %d", signedTx.Hash(), signedTx.AuxPoW().BlockHash(), signedTx.Nonce())
+			log.Debugf("Sending transaction to canxium, hash %s, block hash %s, nonce: %d", signedTx.Hash(), signedTx.AuxPoW().BlockHash(), signedTx.Nonce())
 			err = m.ethClient.SendTransaction(context.Background(), signedTx)
 			if err == nil {
-				log.Infof("Sent transaction to canxium, hash %s, block hash %s, nonce: %d", signedTx.Hash(), signedTx.AuxPoW().BlockHash(), signedTx.Nonce())
+				log.Infof("Sent tx hash %s, block hash %s, nonce: %d", signedTx.Hash(), signedTx.AuxPoW().BlockHash(), signedTx.Nonce())
 				nonce += 1
 				continue
 			}
@@ -275,13 +275,14 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 		}
 
 		if databaseBlock.IsValidBlock {
-			log.Infof("Inserted valid kaspa block %s to database, miner %s", blockHash, databaseBlock.Miner)
+			log.Debugf("Inserted valid kaspa block %s to database, miner %s", blockHash, databaseBlock.Miner)
 		}
-	}
 
-	err := p.database.InsertMergeBlock(databaseBlock)
-	if err != nil {
-		return errors.Wrapf(err, "Could not insert block %s", blockHash)
+		if err := p.database.InsertMergeBlock(databaseBlock); err != nil {
+			return errors.Wrapf(err, "Could not insert block %s", blockHash)
+		}
+	} else {
+		p.database.DeleteMergeBlock(databaseBlock)
 	}
 
 	return nil

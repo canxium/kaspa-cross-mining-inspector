@@ -19,12 +19,6 @@ type Block struct {
 	IsInVirtualSelectedParentChain bool     `pg:"is_in_virtual_selected_parent_chain,use_zero"`
 	MergeSetRedIDs                 []uint64 `pg:"merge_set_red_ids,use_zero"`
 	MergeSetBlueIDs                []uint64 `pg:"merge_set_blue_ids,use_zero"`
-
-	MergeTxSigner  string `pg:"merge_tx_signer"`
-	MergeTxNonce   int64  `pg:"merge_tx_nonce,use_zero"`
-	MergeTxRaw     string `pg:"merge_tx_raw"`
-	MergeTxHash    string `pg:"merge_tx_hash"`
-	MergeTxSuccess bool   `pg:"merge_tx_success"`
 }
 
 type MergeBlock struct {
@@ -34,11 +28,8 @@ type MergeBlock struct {
 	Timestamp  int64  `pg:"timestamp,use_zero"`
 	Miner      string `pg:"miner"`
 
-	MergeTxSigner  string `pg:"merge_tx_signer"`
-	MergeTxNonce   int64  `pg:"merge_tx_nonce,use_zero"`
-	MergeTxRaw     string `pg:"merge_tx_raw"`
-	MergeTxHash    string `pg:"merge_tx_hash"`
-	MergeTxSuccess bool   `pg:"merge_tx_success,use_zero"`
+	MergeTxHash    string `pg:"tx_hash"`
+	MergeTxSuccess bool   `pg:"tx_success,use_zero"`
 
 	IsValidBlock bool `pg:"is_valid_block,use_zero"`
 }

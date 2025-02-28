@@ -139,8 +139,16 @@ func (db *Database) DoesMergeBlockExist(databaseTransaction *pg.Tx, blockHash *e
 func (db *Database) InsertMergeBlock(block *model.MergeBlock) error {
 	if _, err := db.database.Model(block).
 		OnConflict("(block_hash) DO UPDATE").
-		Set("difficulty = EXCLUDED.difficulty, miner = EXCLUDED.miner, merge_tx_signer = EXCLUDED.merge_tx_signer, merge_tx_nonce = EXCLUDED.merge_tx_nonce, merge_tx_raw = EXCLUDED.merge_tx_raw, merge_tx_hash = EXCLUDED.merge_tx_hash, merge_tx_success = EXCLUDED.merge_tx_success, is_valid_block = EXCLUDED.is_valid_block, timestamp = EXCLUDED.timestamp").
+		Set("difficulty = EXCLUDED.difficulty, miner = EXCLUDED.miner, tx_hash = EXCLUDED.tx_hash, tx_success = EXCLUDED.tx_success, is_valid_block = EXCLUDED.is_valid_block, timestamp = EXCLUDED.timestamp").
 		Insert(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *Database) DeleteMergeBlock(block *model.MergeBlock) error {
+	if _, err := db.database.Exec("DELETE FROM merge_blocks WHERE block_hash = ?", block.BlockHash); err != nil {
 		return err
 	}
 
@@ -158,7 +166,7 @@ func (db *Database) GetUnProcessMergeBlocks() (*[]model.MergeBlock, error) {
 
 func (db *Database) GetPendingMergeBlocks() (*[]model.MergeBlock, error) {
 	result := new([]model.MergeBlock)
-	_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE miner is not null and is_valid_block = true and merge_tx_success = false order by timestamp asc limit 50")
+	_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE miner is not null and is_valid_block = true and tx_success = false order by timestamp asc limit 50")
 	if err != nil {
 		return nil, err
 	}
