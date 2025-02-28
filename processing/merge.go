@@ -149,11 +149,6 @@ func (m *MergeMining) Start() error {
 		for _, block := range *mergeBlocks {
 			b, err := m.kaspaClient.GetBlock(block.BlockHash, true)
 			if err != nil || b.Error != nil {
-				block.IsValidBlock = false
-				if err := m.database.InsertMergeBlock(&block); err != nil {
-					return errors.Wrapf(err, "Could not insert block %s", block.BlockHash)
-				}
-
 				log.Errorf("Failed to get block info from kaspa node, error: %+v, block error: %+v", err, b)
 				continue
 			}
@@ -161,6 +156,12 @@ func (m *MergeMining) Start() error {
 			domainBlock, err := appmessage.RPCBlockToDomainBlock(b.Block)
 			if err != nil {
 				log.Errorf("Failed to convert rpc block to domain block, error: %+v", err)
+				time.Sleep(time.Second)
+				continue
+			}
+
+			if len(domainBlock.Transactions) == 0 {
+				log.Warnf("block %s have zero transaction, retrying...", block.BlockHash)
 				time.Sleep(time.Second)
 				continue
 			}
@@ -231,11 +232,11 @@ func (m *MergeMining) SubmitTransactions() error {
 			}
 
 			block.TxError = err.Error()
-			if err.Error() == core.ErrCrossMiningTimestampTooLow.Error() {
+			if err.Error() == core.ErrCrossMiningTimestampTooLow.Error() || err.Error() == misc.ErrInvalidMiningTimeLine.Error() || err.Error() == misc.ErrInvalidMiningBlockTime.Error() {
 				log.Warnf("Ignore block %s because of timestamp too low: %d", block.BlockHash, block.Timestamp)
 				block.IsValidBlock = false
 			} else {
-				log.Warnf("Transaction %s | block %s sent with error: %s", signedTx.Hash(), block.BlockHash, err.Error())
+				log.Warnf("Transaction %s | value %s | nonce %d | block %s | error: %s", signedTx.Hash(), signedTx.Value().String(), signedTx.Nonce(), block.BlockHash, err.Error())
 			}
 
 			if err := m.database.InsertMergeBlock(&block); err != nil {
@@ -288,6 +289,7 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 			return errors.Wrapf(err, "Could not insert block %s", blockHash)
 		}
 	} else {
+		log.Debugf("Removing invalid block %s: tx len: %d, is valid block: %t", blockHash, len(block.Transactions), p.isValidCrossMiningBlock(block))
 		p.database.DeleteMergeBlock(databaseBlock)
 	}
 
