@@ -229,12 +229,17 @@ func (m *MergeMining) SubmitTransactions() error {
 				nonce += 1
 				continue
 			}
-			if err == core.ErrCrossMiningTimestampTooLow {
+
+			block.TxError = err.Error()
+			if err.Error() == core.ErrCrossMiningTimestampTooLow.Error() {
 				log.Warnf("Ignore block %s because of timestamp too low: %d", block.BlockHash, block.Timestamp)
 				block.IsValidBlock = false
-				if err := m.database.InsertMergeBlock(&block); err != nil {
-					return errors.Wrapf(err, "Could not upsert block %s", block.BlockHash)
-				}
+			} else {
+				log.Warnf("Transaction %s | block %s sent with error: %s", signedTx.Hash(), block.BlockHash, err.Error())
+			}
+
+			if err := m.database.InsertMergeBlock(&block); err != nil {
+				return errors.Wrapf(err, "Could not upsert block %s", block.BlockHash)
 			}
 		}
 
@@ -258,6 +263,7 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 		if err != nil {
 			log.Errorf("Could not build merge mining transaction for block %s, error: %+v", blockHash, err)
 			databaseBlock.IsValidBlock = false
+			databaseBlock.TxError = err.Error()
 		} else if p.config.MinerAddress != "" && !strings.EqualFold(minerAddress.String(), p.config.MinerAddress) {
 			databaseBlock.IsValidBlock = false
 		} else if signedTx != nil {

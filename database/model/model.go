@@ -30,6 +30,7 @@ type MergeBlock struct {
 
 	MergeTxHash    string `pg:"tx_hash"`
 	MergeTxSuccess bool   `pg:"tx_success,use_zero"`
+	TxError        string `pg:"tx_error"`
 
 	IsValidBlock bool `pg:"is_valid_block,use_zero"`
 }
