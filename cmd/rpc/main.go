@@ -24,6 +24,9 @@ func main() {
 	logging.Logger().Infof("Application version %s", versionPackage.Version())
 	logging.Logger().Infof("Embedded kaspad version %s", version.Version())
 	logging.Logger().Infof("Network %s", config.ActiveNetParams.Name)
+	logging.Logger().Infof("Helium Fork %d", config.HeliumForkTime)
+	logging.Logger().Infof("Mining Contract %s", config.MiningContract)
+	logging.Logger().Infof("Min Difficulty %d", config.MinimumKaspaDifficulty)
 
 	database, err := databasePackage.Connect(config.DatabaseConnectionString)
 	if err != nil {

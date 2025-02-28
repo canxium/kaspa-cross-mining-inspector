@@ -260,23 +260,28 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 	}
 
 	if len(block.Transactions) > 0 && p.isValidCrossMiningBlock(block) {
-		signedTx, minerAddress, err := p.blockToMergeMiningTransaction(block, 0)
-		if err != nil {
-			log.Errorf("Could not build merge mining transaction for block %s, error: %+v", blockHash, err)
+		if databaseBlock.Timestamp < int64(p.config.HeliumForkTime)*1000 {
 			databaseBlock.IsValidBlock = false
-			databaseBlock.TxError = err.Error()
-		} else if p.config.MinerAddress != "" && !strings.EqualFold(minerAddress.String(), p.config.MinerAddress) {
-			databaseBlock.IsValidBlock = false
-		} else if signedTx != nil {
-			isExistSameBlock := p.database.IsExistSameBlockMinerAndTimeStamp(minerAddress.String(), databaseBlock.Timestamp)
-			if isExistSameBlock {
-				log.Warnf("Invalid block %s, same timestamp block existed in database: %d", databaseBlock.BlockHash, databaseBlock.Timestamp)
+			databaseBlock.TxError = "pre-fork mining kaspa block, helium fork not yet reached"
+		} else {
+			signedTx, minerAddress, err := p.blockToMergeMiningTransaction(block, 0)
+			if err != nil {
+				log.Errorf("Could not build merge mining transaction for block %s, error: %+v", blockHash, err)
 				databaseBlock.IsValidBlock = false
-			} else {
-				databaseBlock.Difficulty = signedTx.AuxPoW().Difficulty().Uint64()
-				if databaseBlock.Difficulty >= p.config.MinimumKaspaDifficulty {
-					databaseBlock.IsValidBlock = true
-					databaseBlock.Miner = minerAddress.String()
+				databaseBlock.TxError = err.Error()
+			} else if p.config.MinerAddress != "" && !strings.EqualFold(minerAddress.String(), p.config.MinerAddress) {
+				databaseBlock.IsValidBlock = false
+			} else if signedTx != nil {
+				isExistSameBlock := p.database.IsExistSameBlockMinerAndTimeStamp(minerAddress.String(), databaseBlock.Timestamp)
+				if isExistSameBlock {
+					log.Warnf("Invalid block %s, same timestamp block existed in database: %d", databaseBlock.BlockHash, databaseBlock.Timestamp)
+					databaseBlock.IsValidBlock = false
+				} else {
+					databaseBlock.Difficulty = signedTx.AuxPoW().Difficulty().Uint64()
+					if databaseBlock.Difficulty >= p.config.MinimumKaspaDifficulty {
+						databaseBlock.IsValidBlock = true
+						databaseBlock.Miner = minerAddress.String()
+					}
 				}
 			}
 		}
