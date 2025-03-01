@@ -226,7 +226,7 @@ func (m *MergeMining) SubmitTransactions() error {
 
 			log.Debugf("Sending transaction to canxium, hash %s, block hash %s, nonce: %d", signedTx.Hash(), signedTx.AuxPoW().BlockHash(), signedTx.Nonce())
 			txErr := m.ethClient.SendTransaction(context.Background(), signedTx)
-			if txErr == nil {
+			if txErr == nil || txErr.Error() == txpool.ErrAlreadyKnown.Error() {
 				log.Infof("Sent tx hash %s, block hash %s, nonce: %d", signedTx.Hash(), signedTx.AuxPoW().BlockHash(), signedTx.Nonce())
 				nonce += 1
 				continue
