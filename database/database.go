@@ -139,7 +139,7 @@ func (db *Database) DoesMergeBlockExist(databaseTransaction *pg.Tx, blockHash *e
 func (db *Database) InsertMergeBlock(block *model.MergeBlock) error {
 	if _, err := db.database.Model(block).
 		OnConflict("(block_hash) DO UPDATE").
-		Set("difficulty = EXCLUDED.difficulty, miner = EXCLUDED.miner, tx_hash = EXCLUDED.tx_hash, tx_success = EXCLUDED.tx_success, tx_error = EXCLUDED.tx_error, is_valid_block = EXCLUDED.is_valid_block, timestamp = EXCLUDED.timestamp").
+		Set("difficulty = EXCLUDED.difficulty, miner = EXCLUDED.miner, tx_hash = EXCLUDED.tx_hash, tx_success = EXCLUDED.tx_success, tx_error = EXCLUDED.tx_error, is_valid_block = EXCLUDED.is_valid_block, timestamp = EXCLUDED.timestamp, gas_cap = EXCLUDED.gas_cap").
 		Insert(); err != nil {
 		return err
 	}
