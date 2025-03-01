@@ -1,0 +1,2 @@
+ALTER TABLE merge_blocks
+  ADD COLUMN gas_cap BIGINT DEFAULT 0;

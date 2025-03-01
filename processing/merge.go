@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -217,30 +218,37 @@ func (m *MergeMining) SubmitTransactions() error {
 				continue
 			}
 
-			signedTx, _, err := m.blockToMergeMiningTransaction(auxBlock, nonce)
+			signedTx, _, err := m.blockToMergeMiningTransaction(auxBlock, nonce, block.GasCap)
 			if err != nil {
 				log.Errorf("Could not build merge mining transaction for block %s, error: %+v", block.BlockHash, err)
 				continue
 			}
 
 			log.Debugf("Sending transaction to canxium, hash %s, block hash %s, nonce: %d", signedTx.Hash(), signedTx.AuxPoW().BlockHash(), signedTx.Nonce())
-			err = m.ethClient.SendTransaction(context.Background(), signedTx)
-			if err == nil {
+			txErr := m.ethClient.SendTransaction(context.Background(), signedTx)
+			if txErr == nil {
 				log.Infof("Sent tx hash %s, block hash %s, nonce: %d", signedTx.Hash(), signedTx.AuxPoW().BlockHash(), signedTx.Nonce())
 				nonce += 1
 				continue
 			}
 
-			block.TxError = err.Error()
-			if err.Error() == core.ErrCrossMiningTimestampTooLow.Error() || err.Error() == misc.ErrInvalidMiningTimeLine.Error() || err.Error() == misc.ErrInvalidMiningBlockTime.Error() {
+			block.TxError = txErr.Error()
+			if txErr.Error() == core.ErrCrossMiningTimestampTooLow.Error() || txErr.Error() == misc.ErrInvalidMiningTimeLine.Error() || txErr.Error() == misc.ErrInvalidMiningBlockTime.Error() {
 				log.Warnf("Ignore block %s because of timestamp too low: %d", block.BlockHash, block.Timestamp)
 				block.IsValidBlock = false
+			} else if txErr.Error() == txpool.ErrReplaceUnderpriced.Error() {
+				log.Warnf("Transaction %s | value %s | nonce %d | block %s | error: %s", signedTx.Hash(), signedTx.Value().String(), signedTx.Nonce(), block.BlockHash, txErr.Error())
+				block.GasCap += 100000000
 			} else {
-				log.Warnf("Transaction %s | value %s | nonce %d | block %s | error: %s", signedTx.Hash(), signedTx.Value().String(), signedTx.Nonce(), block.BlockHash, err.Error())
+				log.Warnf("Transaction %s | value %s | nonce %d | block %s | error: %s", signedTx.Hash(), signedTx.Value().String(), signedTx.Nonce(), block.BlockHash, txErr.Error())
 			}
 
 			if err := m.database.InsertMergeBlock(&block); err != nil {
 				return errors.Wrapf(err, "Could not upsert block %s", block.BlockHash)
+			}
+
+			if txErr.Error() == txpool.ErrReplaceUnderpriced.Error() {
+				break
 			}
 		}
 
@@ -264,7 +272,7 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 			databaseBlock.IsValidBlock = false
 			databaseBlock.TxError = "pre-fork mining kaspa block, helium fork not yet reached"
 		} else {
-			signedTx, minerAddress, err := p.blockToMergeMiningTransaction(block, 0)
+			signedTx, minerAddress, err := p.blockToMergeMiningTransaction(block, 0, 0)
 			if err != nil {
 				log.Errorf("Could not build merge mining transaction for block %s, error: %+v", blockHash, err)
 				databaseBlock.IsValidBlock = false
@@ -301,7 +309,7 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 	return nil
 }
 
-func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlock, nonce uint64) (*types.Transaction, common.Address, error) {
+func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlock, nonce uint64, gas int64) (*types.Transaction, common.Address, error) {
 	blockHeader := types.NewImmutableKaspaBlockHeader(
 		block.Header.Version(),
 		block.Header.Parents(),
@@ -356,8 +364,8 @@ func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlo
 	signedTx, err := types.SignTx(types.NewTx(&types.CrossMiningTx{
 		ChainID:   big.NewInt(p.config.CanxiumChainId),
 		Nonce:     nonce,
-		GasTipCap: big.NewInt(0),
-		GasFeeCap: big.NewInt(0),
+		GasTipCap: big.NewInt(gas),
+		GasFeeCap: big.NewInt(gas),
 		Gas:       100000,
 		From:      p.account.address,
 		To:        common.HexToAddress(p.config.MiningContract),

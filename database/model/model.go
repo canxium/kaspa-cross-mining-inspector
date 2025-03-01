@@ -32,7 +32,8 @@ type MergeBlock struct {
 	MergeTxSuccess bool   `pg:"tx_success,use_zero"`
 	TxError        string `pg:"tx_error"`
 
-	IsValidBlock bool `pg:"is_valid_block,use_zero"`
+	IsValidBlock bool  `pg:"is_valid_block,use_zero"`
+	GasCap       int64 `pg:"gas_cap,use_zero"`
 }
 
 type Edge struct {
