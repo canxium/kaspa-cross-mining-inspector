@@ -166,7 +166,7 @@ func (db *Database) GetUnProcessMergeBlocks() (*[]model.MergeBlock, error) {
 
 func (db *Database) GetPendingMergeBlocks() (*[]model.MergeBlock, error) {
 	result := new([]model.MergeBlock)
-	_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE miner is not null and is_valid_block = true and tx_success = false order by timestamp asc limit 100")
+	_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE miner is not null and is_valid_block = true and tx_success = false order by miner desc, timestamp asc limit 100")
 	if err != nil {
 		return nil, err
 	}

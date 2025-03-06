@@ -278,17 +278,19 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 				databaseBlock.IsValidBlock = false
 				databaseBlock.TxError = err.Error()
 			} else if p.config.MinerAddress != "" && !strings.EqualFold(minerAddress.String(), p.config.MinerAddress) {
+				databaseBlock.Miner = minerAddress.String()
 				databaseBlock.IsValidBlock = false
 			} else if signedTx != nil {
+				databaseBlock.Miner = minerAddress.String()
 				isExistSameBlock := p.database.IsExistSameBlockMinerAndTimeStamp(minerAddress.String(), databaseBlock.Timestamp)
 				if isExistSameBlock {
 					log.Warnf("Invalid block %s, same timestamp block existed in database: %d", databaseBlock.BlockHash, databaseBlock.Timestamp)
 					databaseBlock.IsValidBlock = false
+					databaseBlock.TxError = "same miner & timestamp block existed in database"
 				} else {
 					databaseBlock.Difficulty = signedTx.AuxPoW().Difficulty().Uint64()
 					if databaseBlock.Difficulty >= p.config.MinimumKaspaDifficulty {
 						databaseBlock.IsValidBlock = true
-						databaseBlock.Miner = minerAddress.String()
 					}
 				}
 			}
