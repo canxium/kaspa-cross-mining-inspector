@@ -53,7 +53,7 @@ type Flags struct {
 	CanxiumChainId         int64  `long:"canxium-chainid" description:"Canxium chain Id"`
 	MinerAddress           string `long:"miner-address" description:"Canxium miner address to filter the block"`
 
-	StorageMassActivated bool `long:"mass-activated" description:"Kaspa storage mass activation"`
+	CrescendoActivation uint64 `long:"crescendo_activation" description:"Kaspa crescendo activation"`
 
 	kaspaConfigPackage.NetworkFlags
 }

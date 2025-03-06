@@ -325,12 +325,13 @@ func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlo
 		block.Header.PruningPoint(),
 	)
 
-	proof := GenerateMerkleProofForCoinbase(block.Transactions, p.config.StorageMassActivated)
+	CrescendoActivation := block.Header.DAAScore() >= p.config.CrescendoActivation
+	proof := GenerateMerkleProofForCoinbase(block.Transactions, CrescendoActivation)
 	kaspaBock := &types.KaspaBlock{
 		Header:               &blockHeader,
 		MerkleProof:          proof,
 		Coinbase:             block.Transactions[0],
-		StorageMassActivated: p.config.StorageMassActivated,
+		StorageMassActivated: CrescendoActivation,
 	}
 
 	value := misc.CrossMiningReward(kaspaBock, p.config.HeliumForkTime, uint64(time.Now().Unix()))
