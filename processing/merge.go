@@ -180,8 +180,9 @@ func (m *MergeMining) Start() error {
 
 // Submit and check transaction status
 func (m *MergeMining) SubmitTransactions() error {
+	delayMilli := int64(3000)
 	for {
-		mergeBlocks, err := m.database.GetPendingMergeBlocks()
+		mergeBlocks, err := m.database.GetPendingMergeBlocks(delayMilli)
 		if err != nil {
 			log.Warnf("Failed to query pending merge block from database, sleep 3s, error: %s", err.Error())
 			time.Sleep(3 * time.Second)
@@ -247,12 +248,12 @@ func (m *MergeMining) SubmitTransactions() error {
 				return errors.Wrapf(err, "Could not upsert block %s", block.BlockHash)
 			}
 
-			if txErr.Error() == txpool.ErrReplaceUnderpriced.Error() {
+			if txErr.Error() == txpool.ErrReplaceUnderpriced.Error() || txErr.Error() == core.ErrNonceTooLow.Error() {
 				break
 			}
 		}
 
-		time.Sleep(3 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 }
 

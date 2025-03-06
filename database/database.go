@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/go-pg/pg/v10"
 	"github.com/kaspa-live/kaspa-graph-inspector/database/model"
@@ -164,9 +165,11 @@ func (db *Database) GetUnProcessMergeBlocks() (*[]model.MergeBlock, error) {
 	return result, nil
 }
 
-func (db *Database) GetPendingMergeBlocks() (*[]model.MergeBlock, error) {
+func (db *Database) GetPendingMergeBlocks(delayMilli int64) (*[]model.MergeBlock, error) {
+	now := time.Now().UTC()
+	timestamp := now.UnixMilli() - delayMilli
 	result := new([]model.MergeBlock)
-	_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE miner is not null and is_valid_block = true and tx_success = false order by miner desc, timestamp asc limit 100")
+	_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE miner is not null and is_valid_block = true and tx_success = false and timestamp <= ? order by miner desc, timestamp asc limit 20", timestamp)
 	if err != nil {
 		return nil, err
 	}
