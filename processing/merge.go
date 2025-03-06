@@ -239,7 +239,10 @@ func (m *MergeMining) SubmitTransactions() error {
 				block.IsValidBlock = false
 			} else if txErr.Error() == txpool.ErrReplaceUnderpriced.Error() {
 				log.Warnf("Transaction %s | value %s | nonce %d | block %s | error: %s", signedTx.Hash(), signedTx.Value().String(), signedTx.Nonce(), block.BlockHash, txErr.Error())
-				block.GasCap += 100000000
+				now := time.Now().UTC()
+				if (now.UnixMilli() - block.Timestamp) > 60000 {
+					block.GasCap += 100000000
+				}
 			} else {
 				log.Warnf("Transaction %s | value %s | nonce %d | block %s | error: %s", signedTx.Hash(), signedTx.Value().String(), signedTx.Nonce(), block.BlockHash, txErr.Error())
 			}
@@ -402,3 +405,5 @@ func (m *MergeMining) isValidCrossMiningBlock(block *externalapi.DomainBlock) bo
 	// Validate the prefix
 	return strings.HasPrefix(tag, minerTagPrefix)
 }
+
+func (m *MergeMining) generateKey()
