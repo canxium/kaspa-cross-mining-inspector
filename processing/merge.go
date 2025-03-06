@@ -406,5 +406,3 @@ func (m *MergeMining) isValidCrossMiningBlock(block *externalapi.DomainBlock) bo
 	// Validate the prefix
 	return strings.HasPrefix(tag, minerTagPrefix)
 }
-
-func (m *MergeMining) generateKey()
