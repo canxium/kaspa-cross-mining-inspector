@@ -233,8 +233,8 @@ func (m *MergeMining) SubmitTransactions() error {
 			}
 
 			block.TxError = txErr.Error()
-			if txErr.Error() == core.ErrCrossMiningTimestampTooLow.Error() || txErr.Error() == misc.ErrInvalidMiningTimeLine.Error() || txErr.Error() == misc.ErrInvalidMiningBlockTime.Error() {
-				log.Warnf("Ignore block %s because of timestamp too low: %d", block.BlockHash, block.Timestamp)
+			if txErr.Error() == core.ErrCrossMiningTimestampTooLow.Error() || txErr.Error() == misc.ErrInvalidMiningTimeLine.Error() || txErr.Error() == misc.ErrInvalidMiningBlockTime.Error() || txErr.Error() == misc.ErrInvalidMergeCoinbase.Error() {
+				log.Warnf("Ignore block %s because of error: %s", block.BlockHash, txErr.Error())
 				block.IsValidBlock = false
 			} else if txErr.Error() == txpool.ErrReplaceUnderpriced.Error() {
 				log.Warnf("Transaction %s | value %s | nonce %d | block %s | error: %s", signedTx.Hash(), signedTx.Value().String(), signedTx.Nonce(), block.BlockHash, txErr.Error())
