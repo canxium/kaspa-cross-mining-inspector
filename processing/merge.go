@@ -240,7 +240,7 @@ func (m *MergeMining) SubmitTransactions() error {
 			} else if txErr.Error() == txpool.ErrReplaceUnderpriced.Error() {
 				log.Warnf("Transaction %s | value %s | nonce %d | block %s | error: %s", signedTx.Hash(), signedTx.Value().String(), signedTx.Nonce(), block.BlockHash, txErr.Error())
 				now := time.Now().UTC()
-				if (now.UnixMilli() - block.Timestamp) > 60000 {
+				if (now.UnixMilli() - block.Timestamp) > 30000 {
 					log.Warnf("Transaction %s | value %s | nonce %d | block %s | increaseing gas price!", signedTx.Hash(), signedTx.Value().String(), signedTx.Nonce(), block.BlockHash)
 					block.GasCap += 100000000
 				}
