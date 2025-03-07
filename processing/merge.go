@@ -180,9 +180,8 @@ func (m *MergeMining) Start() error {
 
 // Submit and check transaction status
 func (m *MergeMining) SubmitTransactions() error {
-	delayMilli := int64(3000)
 	for {
-		mergeBlocks, err := m.database.GetPendingMergeBlocks(delayMilli)
+		mergeBlocks, err := m.database.GetPendingMergeBlocks(m.config.DelayInMilliSecond)
 		if err != nil {
 			log.Warnf("Failed to query pending merge block from database, sleep 3s, error: %s", err.Error())
 			time.Sleep(3 * time.Second)
@@ -240,7 +239,7 @@ func (m *MergeMining) SubmitTransactions() error {
 			} else if txErr.Error() == txpool.ErrReplaceUnderpriced.Error() {
 				log.Warnf("Transaction %s | value %s | nonce %d | block %s | error: %s", signedTx.Hash(), signedTx.Value().String(), signedTx.Nonce(), block.BlockHash, txErr.Error())
 				now := time.Now().UTC()
-				if (now.UnixMilli() - block.Timestamp) > 30000 {
+				if (now.UnixMilli() - block.Timestamp) > (m.config.DelayInMilliSecond + 30000) {
 					log.Warnf("Transaction %s | value %s | nonce %d | block %s | increaseing gas price!", signedTx.Hash(), signedTx.Value().String(), signedTx.Nonce(), block.BlockHash)
 					block.GasCap += 100000000
 				}

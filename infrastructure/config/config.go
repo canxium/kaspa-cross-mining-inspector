@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,8 @@ const (
 	defaultLogLevel       = "info"
 	defaultLogFilename    = "kgi-processing.log"
 	defaultErrLogFilename = "kgi-processing_err.log"
+
+	CrescendoActivation = math.MaxUint64
 )
 
 var (
@@ -30,6 +33,7 @@ var (
 	defaultDataDir         = filepath.Join(DefaultAppDir)
 	MinimumKaspaDifficulty = uint64(100000)
 	CanxiumChainId         = int64(3003)
+	DelayInMilliSecond     = int64(3000)
 )
 
 type Flags struct {
@@ -54,6 +58,7 @@ type Flags struct {
 	MinerAddress           string `long:"miner-address" description:"Canxium miner address to filter the block"`
 
 	CrescendoActivation uint64 `long:"crescendo-activation" description:"Kaspa crescendo activation"`
+	DelayInMilliSecond  int64  `long:"delay-millisecond" description:"How many millisecond this program will delay before process the block"`
 
 	kaspaConfigPackage.NetworkFlags
 }
@@ -82,6 +87,8 @@ func defaultFlags() *Flags {
 		LogLevel:               defaultLogLevel,
 		MinimumKaspaDifficulty: MinimumKaspaDifficulty,
 		CanxiumChainId:         CanxiumChainId,
+		CrescendoActivation:    CrescendoActivation,
+		DelayInMilliSecond:     DelayInMilliSecond,
 	}
 }
 
