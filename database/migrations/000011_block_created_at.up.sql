@@ -1,0 +1,1 @@
+ALTER TABLE merge_blocks ADD COLUMN created_at TIMESTAMP DEFAULT NOW();
