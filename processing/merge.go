@@ -303,7 +303,7 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 			if p.config.BlackList != "" && strings.Contains(p.config.BlackList, strings.ToLower(minerAddress.String())) {
 				count, err := p.database.CountBlockByMiner(minerAddress.String())
 				// accept 1 every 10 block
-				if err == nil && count%10 != 0 {
+				if p.config.AlwaysBlock || (err == nil && count%10 != 0) {
 					databaseBlock.IsValidBlock = false
 					databaseBlock.TxError = "Miner address is blocked"
 				}

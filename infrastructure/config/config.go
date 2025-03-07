@@ -60,6 +60,7 @@ type Flags struct {
 	CrescendoActivation uint64 `long:"crescendo-activation" description:"Kaspa crescendo activation"`
 	DelayInMilliSecond  int64  `long:"delay-millisecond" description:"How many millisecond this program will delay before process the block"`
 	BlackList           string `long:"black-miners" description:"List of canxium miners address who is in black list"`
+	AlwaysBlock         bool   `long:"always-block" description:"Always block all block of the black list miner"`
 
 	kaspaConfigPackage.NetworkFlags
 }
