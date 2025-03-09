@@ -13,6 +13,5 @@ services:
       - "--canxium-chainid=${CANXIUM_CHAIN_ID}"
       - "--miner-address=${CANXIUM_MINER_ADDRESS}"
       - "--crescendo-activation=${CRESCENDO_ACTIVATION}"
-      # - "--mass-activated"
     network_mode: host
     restart: always

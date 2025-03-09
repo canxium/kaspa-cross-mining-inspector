@@ -300,8 +300,21 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 			}
 		}
 
+		minerAddress := strings.ToLower(databaseBlock.Miner)
 		if databaseBlock.IsValidBlock {
-			log.Debugf("Inserted valid kaspa block %s to database, miner %s", blockHash, databaseBlock.Miner)
+			// check if miner is blocked
+			count, err := p.database.CountBlockByMiner(databaseBlock.Miner)
+			if err == nil && (p.config.AlwaysBlock || !p.config.RateLimit.ShouldProcessBlock(minerAddress, int(count))) {
+				databaseBlock.IsValidBlock = false
+				databaseBlock.TxError = "Miner address is blocked"
+				log.Warnf("Miner %s have %d blocks, rate limit %d, is good miner: %t, skipped block %s", minerAddress, count, p.config.RateLimit.RateLimits[minerAddress], p.config.RateLimit.GoodMiners[minerAddress], blockHash)
+			} else {
+				log.Debugf("Inserted valid kaspa block %s to database, miner %s", blockHash, minerAddress)
+			}
+		}
+
+		if _, exists := p.config.RateLimit.RateLimits[minerAddress]; !exists {
+			log.Warnf("Miner address %s is not tracked in ratelimit yet", minerAddress)
 		}
 
 		if err := p.database.InsertMergeBlock(databaseBlock); err != nil {

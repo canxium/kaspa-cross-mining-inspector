@@ -37,6 +37,7 @@ type MergeBlock struct {
 	IsValidBlock bool      `pg:"is_valid_block,use_zero"`
 	GasCap       int64     `pg:"gas_cap,use_zero"`
 	CreatedAt    time.Time `pg:"created_at"`
+	DaaScore     uint64    `pg:"daa_score"`
 }
 
 type Edge struct {

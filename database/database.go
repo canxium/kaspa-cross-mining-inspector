@@ -176,6 +176,14 @@ func (db *Database) GetPendingMergeBlocks(delayMilli int64) (*[]model.MergeBlock
 	return result, nil
 }
 
+func (db *Database) CountBlockByMiner(address string) (uint64, error) {
+	count, err := db.database.Model((*model.MergeBlock)(nil)).Where("miner = ?", address).Count()
+	if err != nil {
+		return 0, err
+	}
+	return uint64(count), nil
+}
+
 func (db *Database) IsExistSameBlockMinerAndTimeStamp(miner string, timestamp int64) bool {
 	result := new(model.MergeBlock)
 	_, err := db.database.QueryOne(result, "SELECT * FROM merge_blocks WHERE miner = ? and timestamp = ? and is_valid_block = true", miner, timestamp)

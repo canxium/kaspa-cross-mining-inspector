@@ -59,12 +59,38 @@ type Flags struct {
 
 	CrescendoActivation uint64 `long:"crescendo-activation" description:"Kaspa crescendo activation"`
 	DelayInMilliSecond  int64  `long:"delay-millisecond" description:"How many millisecond this program will delay before process the block"`
+	AlwaysBlock         bool   `long:"always-block" description:"Always block all block of the black list miner"`
 
 	kaspaConfigPackage.NetworkFlags
 }
 
+// MinerRateConfig holds the rate limit configuration for miners
+type MinerRateConfig struct {
+	RateLimits map[string]int  // Miner address -> Rate limit number
+	GoodMiners map[string]bool // Miner address -> Is good behavior
+}
+
+// ShouldProcessBlock checks if a block should be processed for a given miner
+func (m *MinerRateConfig) ShouldProcessBlock(minerAddress string, totalBlocks int) bool {
+	address := strings.ToLower(minerAddress)
+	rateLimit, exists := m.RateLimits[address]
+	if !exists {
+		return true // No rate limit set for this miner
+	}
+
+	if m.GoodMiners[address] {
+		// Good behavior: Drop 1 every n blocks
+		return totalBlocks%rateLimit != 0
+	}
+
+	// Normal behavior: Process 1 every n blocks
+	return totalBlocks%rateLimit == 0
+}
+
 type Config struct {
 	*Flags
+
+	RateLimit MinerRateConfig
 }
 
 // cleanAndExpandPath expands environment variables and leading ~ in the
@@ -163,6 +189,26 @@ func LoadConfig() (*Config, error) {
 		fmt.Fprintln(os.Stderr, usageMessage)
 		return nil, err
 	}
+
+	// rate limit
+	limit := MinerRateConfig{
+		RateLimits: map[string]int{
+			"0x1f11fe5f07d1e74c8f77a3cb3101438878853e12": 6,  // drop 1 every n block, F2Pool
+			"0x1923a3a063c1964b3a3cb243527f125e702ac5f1": 5,  // drop 1 every n block, WhalePool
+			"0x92d003f6ba388df9943c01a26a9616b9bda0ac7b": 8,  // drop 1 every n block, k1Pool
+			"0x61faba23a639d1028e74bffe14c483bb80be9d0e": 6,  // process 1 in every n blocks, HumPool
+			"0x0bd3df983e80048c6a2e388fc173436c55c0190b": 5,  // process 1 in every n blocks, AntPool
+			"0x9f43cfea05ab3a39951000d4a85b7f0ca4e23105": 15, // process 1 every n blocks, Kryptex
+
+		},
+		GoodMiners: map[string]bool{
+			"0x1f11fe5f07d1e74c8f77a3cb3101438878853e12": true, // Miner2 has good behavior, drop 1 every n block
+			"0x1923a3a063c1964b3a3cb243527f125e702ac5f1": true,
+			"0x92d003f6ba388df9943c01a26a9616b9bda0ac7b": true,
+		},
+	}
+
+	cfg.RateLimit = limit
 
 	return cfg, nil
 }

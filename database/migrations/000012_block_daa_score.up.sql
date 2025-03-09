@@ -1,0 +1,1 @@
+ALTER TABLE merge_blocks ADD COLUMN daa_score BIGINT DEFAULT 0;
