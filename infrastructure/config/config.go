@@ -66,8 +66,23 @@ type Flags struct {
 
 // MinerRateConfig holds the rate limit configuration for miners
 type MinerRateConfig struct {
-	RateLimits map[string]int  // Miner address -> Rate limit number
-	GoodMiners map[string]bool // Miner address -> Is good behavior
+	RateLimits map[string]int // Miner address -> Rate limit number
+}
+
+// ShouldProcessBlock checks if a block should be processed for a given miner
+func (m *MinerRateConfig) IsMinerBlocked(minerAddress string) bool {
+	address := strings.ToLower(minerAddress)
+	rateLimit, exists := m.RateLimits[address]
+	if !exists {
+		return false
+	}
+
+	// rate limit = -1 mean do not process any block
+	if rateLimit == -1 {
+		return true
+	}
+
+	return false
 }
 
 // ShouldProcessBlock checks if a block should be processed for a given miner
@@ -76,11 +91,6 @@ func (m *MinerRateConfig) ShouldProcessBlock(minerAddress string, totalBlocks in
 	rateLimit, exists := m.RateLimits[address]
 	if !exists {
 		return true // No rate limit set for this miner
-	}
-
-	if m.GoodMiners[address] {
-		// Good behavior: Drop 1 every n blocks
-		return totalBlocks%rateLimit != 0
 	}
 
 	// Normal behavior: Process 1 every n blocks
@@ -193,18 +203,15 @@ func LoadConfig() (*Config, error) {
 	// rate limit
 	limit := MinerRateConfig{
 		RateLimits: map[string]int{
-			"0x1f11fe5f07d1e74c8f77a3cb3101438878853e12": 6,  // drop 1 every n block, F2Pool
-			"0x1923a3a063c1964b3a3cb243527f125e702ac5f1": 5,  // drop 1 every n block, WhalePool
-			"0x92d003f6ba388df9943c01a26a9616b9bda0ac7b": 8,  // drop 1 every n block, k1Pool
-			"0x61faba23a639d1028e74bffe14c483bb80be9d0e": 10, // process 1 in every n blocks, HumPool
-			"0x0bd3df983e80048c6a2e388fc173436c55c0190b": 6,  // process 1 in every n blocks, AntPool
-			"0x9f43cfea05ab3a39951000d4a85b7f0ca4e23105": 15, // process 1 every n blocks, Kryptex
-
-		},
-		GoodMiners: map[string]bool{
-			"0x1f11fe5f07d1e74c8f77a3cb3101438878853e12": true, // Miner2 has good behavior, drop 1 every n block
-			"0x1923a3a063c1964b3a3cb243527f125e702ac5f1": true,
-			"0x92d003f6ba388df9943c01a26a9616b9bda0ac7b": true,
+			"0x1f11fe5f07d1e74c8f77a3cb3101438878853e12": -1, // drop 1 every n block, F2Pool | 0 = drop all
+			"0x1923a3a063c1964b3a3cb243527f125e702ac5f1": -1, // drop 1 every n block, WhalePool
+			"0x61faba23a639d1028e74bffe14c483bb80be9d0e": -1, // process 1 in every n blocks, HumPool
+			"0x0bd3df983e80048c6a2e388fc173436c55c0190b": -1, // process 1 in every n blocks, AntPool
+			"0x9f43cfea05ab3a39951000d4a85b7f0ca4e23105": -1, // process 1 every n blocks, Kryptex
+			// "0x92d003f6ba388df9943c01a26a9616b9bda0ac7b": 0,  // drop 1 every n block, k1Pool
+			// "0x3bd993628ee3323eb6234e23c8f16f9161ff1e32": 0, // BaiKalMine
+			// "0xAfD0EdE3a0Dd8C4c88CC96B47B4d49CAD1320B24": 0, // EMCD
+			// "0x08f470d8544B406f766390482B2754123aE7b7cf": 0, Unknown
 		},
 	}
 
@@ -212,3 +219,7 @@ func LoadConfig() (*Config, error) {
 
 	return cfg, nil
 }
+
+// Cheater
+// 0xa13deCcC6b067aA72fCb754E802f6d36ed26Ffa9
+// 0xBb6980e4cbFDA9B236410754287f185E313d4F6b
