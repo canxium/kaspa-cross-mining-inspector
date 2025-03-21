@@ -322,9 +322,9 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 			}
 		}
 
-		if _, exists := p.config.RateLimit.RateLimits[minerAddress]; !exists {
-			log.Warnf("Miner address %s is not tracked in ratelimit yet", minerAddress)
-		}
+		// if _, exists := p.config.RateLimit.RateLimits[minerAddress]; !exists {
+		// 	log.Warnf("Miner address %s is not tracked in ratelimit yet", minerAddress)
+		// }
 
 		if err := p.database.InsertMergeBlock(databaseBlock); err != nil {
 			return errors.Wrapf(err, "Could not insert block %s", blockHash)
