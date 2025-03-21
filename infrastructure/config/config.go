@@ -210,7 +210,7 @@ func LoadConfig() (*Config, error) {
 			"0x9f43cfea05ab3a39951000d4a85b7f0ca4e23105": -1, // process 1 every n blocks, Kryptex
 			// "0x92d003f6ba388df9943c01a26a9616b9bda0ac7b": 0,  // drop 1 every n block, k1Pool
 			// "0x3bd993628ee3323eb6234e23c8f16f9161ff1e32": 0, // BaiKalMine
-			// "0xAfD0EdE3a0Dd8C4c88CC96B47B4d49CAD1320B24": 0, // EMCD
+			"0xafd0ede3a0dd8c4c88cc96b47b4d49cad1320b24": -1, // EMCD runned their own sync tool
 			// "0x08f470d8544B406f766390482B2754123aE7b7cf": 0, Unknown
 		},
 	}
