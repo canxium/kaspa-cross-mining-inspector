@@ -195,6 +195,7 @@ func (m *MergeMining) SubmitTransactions() error {
 			continue
 		}
 
+		log.Infof("Start processing %d kaspa blocks", len(*mergeBlocks))
 		for _, block := range *mergeBlocks {
 			if receipt, _ := m.ethClient.TransactionReceiptByAuxPoWHash(context.Background(), block.BlockHash); receipt != nil {
 				log.Infof("Transaction %s success, kaspa block hash: %s, status: %d, included in block %d", receipt.TxHash, block.BlockHash, receipt.Status, receipt.BlockNumber.Int64())
