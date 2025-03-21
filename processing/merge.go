@@ -201,8 +201,10 @@ func (m *MergeMining) SubmitTransactions() error {
 				block.MergeTxSuccess = true
 				block.MergeTxHash = receipt.TxHash.String()
 				if err := m.database.InsertMergeBlock(&block); err != nil {
-					return errors.Wrapf(err, "Could not upsert block %s", block.BlockHash)
+					log.Warnf("Could not upsert block %s", block.BlockHash)
+					break
 				}
+
 				continue
 			}
 
@@ -248,7 +250,8 @@ func (m *MergeMining) SubmitTransactions() error {
 			}
 
 			if err := m.database.InsertMergeBlock(&block); err != nil {
-				return errors.Wrapf(err, "Could not upsert block %s", block.BlockHash)
+				log.Warnf("Could not upsert block %s", block.BlockHash)
+				break
 			}
 
 			if txErr.Error() == txpool.ErrReplaceUnderpriced.Error() || txErr.Error() == core.ErrNonceTooLow.Error() {
