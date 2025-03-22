@@ -188,16 +188,20 @@ func (m *MergeMining) SubmitTransactions() error {
 			continue
 		}
 
-		nonce, err := m.ethClient.NonceAt(context.Background(), m.account.address, nil)
+		nCtx, nCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		nonce, err := m.ethClient.NonceAt(nCtx, m.account.address, nil)
 		if err != nil {
+			nCancel()
 			log.Errorf("Failed to query account nonce, sleep 3s, error: %s", err.Error())
 			time.Sleep(3 * time.Second)
 			continue
 		}
 
-		log.Infof("Start processing %d kaspa blocks", len(*mergeBlocks))
+		nCancel()
 		for _, block := range *mergeBlocks {
-			if receipt, _ := m.ethClient.TransactionReceiptByAuxPoWHash(context.Background(), block.BlockHash); receipt != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			if receipt, _ := m.ethClient.TransactionReceiptByAuxPoWHash(ctx, block.BlockHash); receipt != nil {
+				cancel()
 				log.Infof("Transaction %s success, kaspa block hash: %s, status: %d, included in block %d", receipt.TxHash, block.BlockHash, receipt.Status, receipt.BlockNumber.Int64())
 				block.MergeTxSuccess = true
 				block.MergeTxHash = receipt.TxHash.String()
@@ -209,6 +213,7 @@ func (m *MergeMining) SubmitTransactions() error {
 				continue
 			}
 
+			cancel()
 			b, err := m.kaspaClient.GetBlock(block.BlockHash, true)
 			if err != nil || b.Error != nil {
 				log.Errorf("Failed to get block info from kaspa node, error: %+v, block error: %+v", err, b)
@@ -227,14 +232,17 @@ func (m *MergeMining) SubmitTransactions() error {
 				continue
 			}
 
-			log.Debugf("Sending transaction to canxium, hash %s, block hash %s, nonce: %d", signedTx.Hash(), signedTx.AuxPoW().BlockHash(), signedTx.Nonce())
-			txErr := m.ethClient.SendTransaction(context.Background(), signedTx)
+			log.Infof("Sending transaction to canxium, hash %s, block hash %s, nonce: %d", signedTx.Hash(), signedTx.AuxPoW().BlockHash(), signedTx.Nonce())
+			sendCtx, sendCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			txErr := m.ethClient.SendTransaction(sendCtx, signedTx)
 			if txErr == nil || txErr.Error() == txpool.ErrAlreadyKnown.Error() {
+				sendCancel()
 				log.Infof("Sent tx hash %s, block hash %s, nonce: %d", signedTx.Hash(), signedTx.AuxPoW().BlockHash(), signedTx.Nonce())
 				nonce += 1
 				continue
 			}
 
+			sendCancel()
 			block.TxError = txErr.Error()
 			if txErr.Error() == core.ErrCrossMiningTimestampTooLow.Error() || txErr.Error() == misc.ErrInvalidMiningTimeLine.Error() || txErr.Error() == misc.ErrInvalidMiningBlockTime.Error() || txErr.Error() == misc.ErrInvalidMergeCoinbase.Error() {
 				log.Warnf("Ignore block %s because of error: %s", block.BlockHash, txErr.Error())
