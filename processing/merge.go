@@ -181,7 +181,7 @@ func (m *MergeMining) Start() error {
 // Submit and check transaction status
 func (m *MergeMining) SubmitTransactions() error {
 	for {
-		mergeBlocks, err := m.database.GetPendingMergeBlocks(m.config.DelayInMilliSecond)
+		mergeBlocks, err := m.database.GetPendingMergeBlocks(m.config.DelayInMilliSecond, m.config.MinerAddress)
 		if err != nil {
 			log.Warnf("Failed to query pending merge block from database, sleep 3s, error: %s", err.Error())
 			time.Sleep(3 * time.Second)
@@ -293,9 +293,6 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 				log.Errorf("Could not build merge mining transaction for block %s, error: %+v", blockHash, err)
 				databaseBlock.IsValidBlock = false
 				databaseBlock.TxError = err.Error()
-			} else if p.config.MinerAddress != "" && !strings.EqualFold(minerAddress.String(), p.config.MinerAddress) {
-				databaseBlock.Miner = minerAddress.String()
-				databaseBlock.IsValidBlock = false
 			} else if signedTx != nil {
 				databaseBlock.Miner = minerAddress.String()
 				isExistSameBlock := p.database.IsExistSameBlockMinerAndTimeStamp(minerAddress.String(), databaseBlock.Timestamp)
@@ -317,22 +314,8 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 			if p.config.RateLimit.IsMinerBlocked(minerAddress) {
 				databaseBlock.IsValidBlock = false
 				databaseBlock.TxError = "Miner address is blocked"
-			} else {
-				// check if miner is blocked
-				count, err := p.database.CountBlockByMiner(databaseBlock.Miner)
-				if err == nil && (p.config.AlwaysBlock || !p.config.RateLimit.ShouldProcessBlock(minerAddress, int(count))) {
-					databaseBlock.IsValidBlock = false
-					databaseBlock.TxError = "Miner address is rate limited"
-					log.Debugf("Miner %s have %d blocks, rate limit %d, skipped block %s", minerAddress, count, p.config.RateLimit.RateLimits[minerAddress], blockHash)
-				} else {
-					log.Debugf("Inserted valid kaspa block %s to database, miner %s", blockHash, minerAddress)
-				}
 			}
 		}
-
-		// if _, exists := p.config.RateLimit.RateLimits[minerAddress]; !exists {
-		// 	log.Warnf("Miner address %s is not tracked in ratelimit yet", minerAddress)
-		// }
 
 		if err := p.database.InsertMergeBlock(databaseBlock); err != nil {
 			return errors.Wrapf(err, "Could not insert block %s", blockHash)

@@ -162,17 +162,26 @@ func (db *Database) GetUnProcessMergeBlocks() (*[]model.MergeBlock, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return result, nil
 }
 
-func (db *Database) GetPendingMergeBlocks(delayMilli int64) (*[]model.MergeBlock, error) {
+func (db *Database) GetPendingMergeBlocks(delayMilli int64, miner string) (*[]model.MergeBlock, error) {
 	now := time.Now().UTC()
 	timestamp := now.UnixMilli() - delayMilli
 	result := new([]model.MergeBlock)
-	_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE miner is not null and is_valid_block = true and tx_success = false and timestamp <= ? order by miner desc, timestamp asc limit 20", timestamp)
-	if err != nil {
-		return nil, err
+	if miner != "" {
+		_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE is_valid_block = true and tx_success = false and timestamp <= ? and miner = ? order by miner desc, timestamp asc limit 20", timestamp, miner)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE miner is not null and is_valid_block = true and tx_success = false and timestamp <= ? order by timestamp asc limit 20", timestamp)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	return result, nil
 }
 
