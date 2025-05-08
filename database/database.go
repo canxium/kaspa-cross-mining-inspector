@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -171,7 +172,7 @@ func (db *Database) GetPendingMergeBlocks(delayMilli int64, miner string) (*[]mo
 	timestamp := now.UnixMilli() - delayMilli
 	result := new([]model.MergeBlock)
 	if miner != "" {
-		_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE is_valid_block = true and tx_success = false and timestamp <= ? and miner = ? order by miner desc, timestamp asc limit 20", timestamp, miner)
+		_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE is_valid_block = true and tx_success = false and timestamp <= ? and LOWER(miner) = ? order by timestamp asc limit 20", timestamp, strings.ToLower(miner))
 		if err != nil {
 			return nil, err
 		}
