@@ -172,12 +172,12 @@ func (db *Database) GetPendingMergeBlocks(delayMilli int64, miner string) (*[]mo
 	timestamp := now.UnixMilli() - delayMilli
 	result := new([]model.MergeBlock)
 	if miner != "" {
-		_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE is_valid_block = true and tx_success = false and timestamp <= ? and LOWER(miner) = ? order by timestamp asc limit 20", timestamp, strings.ToLower(miner))
+		_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE is_valid_block = true and tx_success = false and timestamp <= ? and LOWER(miner) = ? order by timestamp asc limit 30", timestamp, strings.ToLower(miner))
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE miner is not null and is_valid_block = true and tx_success = false and timestamp <= ? order by timestamp asc limit 20", timestamp)
+		_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE miner is not null and is_valid_block = true and tx_success = false and timestamp <= ? order by timestamp asc limit 30", timestamp)
 		if err != nil {
 			return nil, err
 		}

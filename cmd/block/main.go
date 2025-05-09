@@ -13,7 +13,7 @@ import (
 
 func main() {
 	fmt.Println("=================================================")
-	fmt.Println("Kaspa Merge Mining (KGI)   -   Processing Tier")
+	fmt.Println("Kaspa Merge Mining (KGI)   -  Block Processing Tier")
 	fmt.Println("=================================================")
 
 	config, err := configPackage.LoadConfig()
@@ -41,7 +41,7 @@ func main() {
 	}
 
 	logging.Logger().Infof("Processing initialized")
-	processing.SubmitTransactions()
+	err = processing.Start()
 	if err != nil {
 		logging.LogErrorAndExit("Could not start kaspad: %s", err)
 	}
