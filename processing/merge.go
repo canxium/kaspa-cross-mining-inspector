@@ -181,7 +181,7 @@ func (m *MergeMining) Start() error {
 // Submit and check transaction status
 func (m *MergeMining) SubmitTransactions() error {
 	for {
-		mergeBlocks, err := m.database.GetPendingMergeBlocks(m.config.DelayInMilliSecond, m.config.MinerAddress)
+		mergeBlocks, err := m.database.GetPendingMergeBlocks(m.config.DelayInMilliSecond, m.config.MinerAddress, m.config.BlockMiners)
 		if err != nil {
 			log.Warnf("Failed to query pending merge block from database, sleep 3s, error: %s", err.Error())
 			time.Sleep(3 * time.Second)

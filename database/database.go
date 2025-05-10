@@ -167,12 +167,17 @@ func (db *Database) GetUnProcessMergeBlocks() (*[]model.MergeBlock, error) {
 	return result, nil
 }
 
-func (db *Database) GetPendingMergeBlocks(delayMilli int64, miner string) (*[]model.MergeBlock, error) {
+func (db *Database) GetPendingMergeBlocks(delayMilli int64, miner string, blockedMiners string) (*[]model.MergeBlock, error) {
 	now := time.Now().UTC()
 	timestamp := now.UnixMilli() - delayMilli
 	result := new([]model.MergeBlock)
 	if miner != "" {
 		_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE is_valid_block = true and tx_success = false and timestamp <= ? and LOWER(miner) = ? order by timestamp asc limit 30", timestamp, strings.ToLower(miner))
+		if err != nil {
+			return nil, err
+		}
+	} else if blockedMiners != "" {
+		_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE is_valid_block = true and tx_success = false and timestamp <= ? and LOWER(miner) NOT IN (?) order by timestamp asc limit 30", timestamp, pg.In(strings.Split(blockedMiners, ",")))
 		if err != nil {
 			return nil, err
 		}

@@ -56,6 +56,7 @@ type Flags struct {
 	MinimumKaspaDifficulty uint64 `long:"min-diff" description:"Canxium merge mining min diff"`
 	CanxiumChainId         int64  `long:"canxium-chainid" description:"Canxium chain Id"`
 	MinerAddress           string `long:"miner-address" description:"Canxium miner address to filter the block"`
+	BlockMiners            string `long:"block-miners" description:"Comma separated list of miners to block"`
 
 	CrescendoActivation uint64 `long:"crescendo-activation" description:"Kaspa crescendo activation"`
 	DelayInMilliSecond  int64  `long:"delay-millisecond" description:"How many millisecond this program will delay before process the block"`
