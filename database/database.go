@@ -157,6 +157,22 @@ func (db *Database) DeleteMergeBlock(block *model.MergeBlock) error {
 	return nil
 }
 
+func (db *Database) DeleteSuccessBlocks() error {
+	if _, err := db.database.Exec("DELETE FROM merge_blocks WHERE tx_success = true"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *Database) DeleteFailedBlocks() error {
+	if _, err := db.database.Exec("DELETE from merge_blocks where is_valid_block = false and tx_error is not null"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (db *Database) GetUnProcessMergeBlocks() (*[]model.MergeBlock, error) {
 	result := new([]model.MergeBlock)
 	_, err := db.database.Query(result, "SELECT * FROM merge_blocks WHERE miner is null and is_valid_block = true order by timestamp asc limit 100")

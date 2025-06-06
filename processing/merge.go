@@ -174,6 +174,11 @@ func (m *MergeMining) Start() error {
 			}
 		}
 
+		now := time.Now()
+		if now.Second() == 59 {
+			m.database.DeleteSuccessBlocks()
+			m.database.DeleteFailedBlocks()
+		}
 		time.Sleep(200 * time.Microsecond)
 	}
 }
