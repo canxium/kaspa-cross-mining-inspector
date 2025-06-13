@@ -175,14 +175,6 @@ func (m *MergeMining) Start() error {
 			}
 		}
 
-		now := time.Now()
-		if now.Second() == 59 {
-			log.Infof("Deleting success and failed blocks")
-			m.database.DeleteSuccessBlocks()
-			m.database.DeleteFailedBlocks()
-			log.Infof("Deleted success and failed blocks")
-		}
-
 		log.Infof("Processed %d blocks", len(*mergeBlocks))
 	}
 }
