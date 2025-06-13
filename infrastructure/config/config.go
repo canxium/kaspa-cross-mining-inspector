@@ -52,6 +52,7 @@ type Flags struct {
 	CanxiumRpc             string `long:"canxium-rpc" description:"Canxium RPC endpoint"`
 	KaspaRpc               string `long:"kaspa-rpc" description:"Kaspa RPC endpoint"`
 	HeliumForkTime         uint64 `long:"canxium-helium-time" description:"Canxium Helium fork time"`
+	LithiumForkTime        int64  `long:"canxium-lithium-time" description:"Canxium Lithium fork time"`
 	MiningContract         string `long:"mining-contract" description:"Canxium merge mining contract"`
 	MinimumKaspaDifficulty uint64 `long:"min-diff" description:"Canxium merge mining min diff"`
 	CanxiumChainId         int64  `long:"canxium-chainid" description:"Canxium chain Id"`

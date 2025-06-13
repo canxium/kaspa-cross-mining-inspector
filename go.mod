@@ -86,6 +86,6 @@ require (
 	mellium.im/sasl v0.2.1 // indirect
 )
 
-replace github.com/ethereum/go-ethereum => github.com/canxium/go-canxium v0.0.0-20250226071237-6f81ff16caab
+replace github.com/ethereum/go-ethereum => github.com/canxium/go-canxium v0.0.0-20250611062809-b610c281fd5e
 
 replace github.com/kaspanet/kaspad => github.com/canxium/kaspad v0.12.19

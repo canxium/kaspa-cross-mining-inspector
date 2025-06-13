@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	crosschain "github.com/ethereum/go-ethereum/core/types/cross-chain"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	databasePackage "github.com/kaspa-live/kaspa-graph-inspector/database"
@@ -252,7 +253,7 @@ func (m *MergeMining) SubmitTransactions() error {
 
 			sendCancel()
 			block.TxError = txErr.Error()
-			if txErr.Error() == core.ErrCrossMiningTimestampTooLow.Error() || txErr.Error() == misc.ErrInvalidMiningTimeLine.Error() || txErr.Error() == misc.ErrInvalidMiningBlockTime.Error() || txErr.Error() == misc.ErrInvalidMergeCoinbase.Error() {
+			if txErr.Error() == core.ErrCrossMiningTimestampTooLow.Error() || txErr.Error() == misc.ErrInvalidMiningTimeLine.Error() || txErr.Error() == misc.ErrInvalidMiningBlockTime.Error() || txErr.Error() == misc.ErrInvalidMergeCoinbase.Error() || txErr.Error() == "invalid cross mining transaction: invalid block PoW hash" {
 				log.Warnf("Ignore block %s because of error: %s", block.BlockHash, txErr.Error())
 				block.IsValidBlock = false
 			} else if txErr.Error() == txpool.ErrReplaceUnderpriced.Error() {
@@ -336,7 +337,7 @@ func (p *MergeMining) processBlock(block *externalapi.DomainBlock) error {
 }
 
 func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlock, nonce uint64, gas int64) (*types.Transaction, common.Address, error) {
-	blockHeader := types.NewImmutableKaspaBlockHeader(
+	blockHeader := crosschain.NewImmutableKaspaBlockHeader(
 		block.Header.Version(),
 		block.Header.Parents(),
 		block.Header.HashMerkleRoot(),
@@ -353,14 +354,15 @@ func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlo
 
 	CrescendoActivation := block.Header.DAAScore() >= p.config.CrescendoActivation
 	proof := GenerateMerkleProofForCoinbase(block.Transactions, CrescendoActivation)
-	kaspaBock := &types.KaspaBlock{
+	kaspaBock := &crosschain.KaspaBlock{
 		Header:               &blockHeader,
 		MerkleProof:          proof,
 		Coinbase:             block.Transactions[0],
 		StorageMassActivated: CrescendoActivation,
 	}
 
-	value := misc.CrossMiningReward(kaspaBock, p.config.HeliumForkTime, uint64(time.Now().Unix()))
+	now := time.Now().Unix()
+	value := misc.CrossMiningReward(now >= p.config.LithiumForkTime, kaspaBock, p.config.HeliumForkTime, uint64(time.Now().Unix()))
 
 	mineFnSignature := []byte("crossChainMining(address,uint16,uint256)")
 	hash := sha3.NewLegacyKeccak256()
@@ -373,7 +375,7 @@ func (p *MergeMining) blockToMergeMiningTransaction(block *externalapi.DomainBlo
 	}
 	paddedAddress := common.LeftPadBytes(receiver.Bytes(), 32)
 	timestamp := big.NewInt(block.Header.TimeInMilliseconds()) // Replace with the actual timestamp
-	chain := types.KaspaChain
+	chain := crosschain.KaspaChain
 	// Convert the chain ID to a hexadecimal value and pad it to 32 bytes
 	chainHex := fmt.Sprintf("%04x", chain)                             // Convert uint16 to a 4-character hex string
 	chainPadded, _ := hex.DecodeString(fmt.Sprintf("%064s", chainHex)) // Pad with leading zeros to 32 bytes
